@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug: NestJS",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:debug"],
+      "env": {
+        "PORT": "3030"
+      },
+      "sourceMaps": true,
+      "smartStep": true,
+      "console": "integratedTerminal",
+      "restart": true
+    }
+  ]
+}

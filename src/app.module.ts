@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { LandingConfigModule } from './landing-config/landing-config.module';
 
 @Module({
   imports: [
@@ -16,12 +17,14 @@ import { AppService } from './app.service';
         type: 'postgres',
         url: configService.get<string>('DATABASE_URL'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
+        migrations: [__dirname + '/migrations/*{.ts,.js}'],
         synchronize: false,
         ssl: {
           rejectUnauthorized: false,
         },
       }),
     }),
+    LandingConfigModule,
   ],
   controllers: [AppController],
   providers: [AppService],
