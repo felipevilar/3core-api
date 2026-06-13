@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { LandingConfigModule } from './landing-config/landing-config.module';
+import { AuthModule } from './auth/auth.module';
+import { TechniciansModule } from './technicians/technicians.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { LandingConfigModule } from './landing-config/landing-config.module';
         },
       }),
     }),
+    AuthModule,
+    TechniciansModule,
     LandingConfigModule,
   ],
   controllers: [AppController],

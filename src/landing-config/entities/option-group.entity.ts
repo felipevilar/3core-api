@@ -1,29 +1,36 @@
-import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
-import { OptionItem } from './option-item.entity'
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { OptionItem } from './option-item.entity';
 
 @Entity('option_groups')
 export class OptionGroup {
   @PrimaryGeneratedColumn()
-  id: number
+  id: number;
 
   @Column({ type: 'varchar' })
-  type: string // 'area' | 'tool'
+  type: string; // 'area' | 'tool'
 
   @Column({ type: 'varchar' })
-  name: string
+  name: string;
 
   @Column({ type: 'int', default: 0 })
-  order: number
+  order: number;
 
   @Column({ type: 'boolean', default: true })
-  active: boolean
+  active: boolean;
 
   @OneToMany(() => OptionItem, (item) => item.group, { cascade: true })
-  items: OptionItem[]
+  items: OptionItem[];
 
   @CreateDateColumn()
-  createdAt: Date
+  createdAt: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date
+  updatedAt: Date;
 }

@@ -1,26 +1,33 @@
-import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
-import { OptionGroup } from './option-group.entity'
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { OptionGroup } from './option-group.entity';
 
 @Entity('option_items')
 export class OptionItem {
   @PrimaryGeneratedColumn()
-  id: number
+  id: number;
 
   @Column({ type: 'varchar' })
-  label: string
+  label: string;
 
   @Column({ type: 'int', default: 0 })
-  order: number
+  order: number;
 
   @Column({ type: 'boolean', default: true })
-  active: boolean
+  active: boolean;
 
   @ManyToOne(() => OptionGroup, (group) => group.items, { onDelete: 'CASCADE' })
-  group: OptionGroup
+  group: OptionGroup;
 
   @CreateDateColumn()
-  createdAt: Date
+  createdAt: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date
+  updatedAt: Date;
 }
