@@ -2,6 +2,7 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
@@ -10,6 +11,7 @@ import { TechProfile } from './entities/tech-profile.entity';
 import { User } from '../auth/entities/user.entity';
 import { Role } from '../auth/entities/role.entity';
 import { RegisterTechDto } from './dto/register-tech.dto';
+import { ListTechniciansQueryDto } from './dto/list-technicians.query.dto';
 import { ROLE_TECNICO } from '../auth/permissions.catalog';
 
 const BCRYPT_ROUNDS = 12;
@@ -25,6 +27,64 @@ export class TechniciansService {
     private readonly roleRepo: Repository<Role>,
     private readonly dataSource: DataSource,
   ) {}
+
+  /**
+   * Lista enxuta para a tabela do dashboard, com filtros opcionais
+   * (nome/e-mail, cidade de residência e cidade atendida). Não retorna
+   * dados sensíveis (CPF/pagamento) — esses ficam na ficha (`findOne`).
+   */
+  async list(query: ListTechniciansQueryDto) {
+    const qb = this.profileRepo
+      .createQueryBuilder('p')
+      .innerJoin('p.user', 'u')
+      .select([
+        'p.id AS id',
+        'u.id AS "userId"',
+        'u.name AS name',
+        'u.email AS email',
+        'u.isActive AS "isActive"',
+        'p.celular AS celular',
+        'p.cidade AS cidade',
+        'p.estado AS estado',
+        'p.areasAtuacao AS "areasAtuacao"',
+        'p.cidadesAtendidas AS "cidadesAtendidas"',
+        'p.createdAt AS "createdAt"',
+      ])
+      .orderBy('u.name', 'ASC');
+
+    if (query.search) {
+      qb.andWhere('(u.name ILIKE :search OR u.email ILIKE :search)', {
+        search: `%${query.search}%`,
+      });
+    }
+    if (query.cidade) {
+      qb.andWhere('p.cidade ILIKE :cidade', { cidade: `%${query.cidade}%` });
+    }
+    if (query.cidadeAtendida) {
+      // Procura a cidade entre os objetos {cidade, custoKm} do JSONB.
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM jsonb_array_elements(p."cidadesAtendidas") AS c
+          WHERE c->>'cidade' ILIKE :cidadeAtendida
+        )`,
+        { cidadeAtendida: `%${query.cidadeAtendida}%` },
+      );
+    }
+
+    return qb.getRawMany();
+  }
+
+  /** Ficha completa do técnico (perfil + dados do usuário). */
+  async findOne(id: number) {
+    const profile = await this.profileRepo.findOne({
+      where: { id },
+      relations: { user: true },
+    });
+    if (!profile) {
+      throw new NotFoundException('Técnico não encontrado');
+    }
+    return profile;
+  }
 
   /**
    * Cadastro vindo da landing page: cria o usuário (papel `tecnico`) + perfil,

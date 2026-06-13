@@ -22,6 +22,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   clientes: 'Clientes',
   inbox: 'Caixa de Entrada',
   landing: 'Landing Page',
+  tecnicos: 'Técnicos',
   usuarios: 'Usuários',
   roles: 'Papéis',
   perfil: 'Perfil',
@@ -73,6 +74,13 @@ export const PERMISSIONS: PermissionDef[] = [
     key: 'landing.gerenciar',
     label: 'Gerenciar áreas/ferramental da landing',
     feature: 'landing',
+  },
+
+  // Técnicos (administração)
+  {
+    key: 'tecnicos.ver',
+    label: 'Ver técnicos (lista e ficha)',
+    feature: 'tecnicos',
   },
 
   // Usuários (administração)
