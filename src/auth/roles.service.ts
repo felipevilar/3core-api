@@ -11,7 +11,7 @@ import { Role } from './entities/role.entity';
 import { Permission } from './entities/permission.entity';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
-import { FEATURE_LABELS } from './permissions.catalog';
+import { FEATURE_LABELS, ROLE_SUPER_ADMIN } from './permissions.catalog';
 
 @Injectable()
 export class RolesService {
@@ -65,11 +65,19 @@ export class RolesService {
     if (!role) {
       throw new NotFoundException('Papel não encontrado');
     }
-    if (
-      role.isSystem &&
-      (dto.name !== undefined || dto.permissionKeys !== undefined)
-    ) {
-      throw new ForbiddenException('Papéis de sistema não podem ser alterados');
+    // O super_admin é totalmente imutável (evita que alguém remova as próprias
+    // permissões e se tranque para fora do sistema).
+    if (role.name === ROLE_SUPER_ADMIN) {
+      throw new ForbiddenException(
+        'O papel super_admin não pode ser alterado',
+      );
+    }
+    // Demais papéis de sistema (ex.: tecnico) têm o nome travado — o cadastro
+    // de técnicos resolve o papel por nome —, mas as permissões são editáveis.
+    if (role.isSystem && dto.name !== undefined && dto.name !== role.name) {
+      throw new ForbiddenException(
+        'O nome de um papel de sistema não pode ser alterado',
+      );
     }
     if (dto.name !== undefined) role.name = dto.name;
     if (dto.description !== undefined) role.description = dto.description;
