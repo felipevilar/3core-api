@@ -2,12 +2,17 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
+  ManyToOne,
+  OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from '../../auth/entities/user.entity';
+import { City } from '../../cities/entities/city.entity';
+import { TechServiceArea } from './tech-service-area.entity';
 
 export interface PagamentoInfo {
   pix?: { chavePix: string; nomeTitularPix: string } | null;
@@ -23,11 +28,6 @@ export interface EmpresaInfo {
   nomeFantasia: string;
   razaoSocial: string;
   cnpj: string;
-}
-
-export interface CidadeAtendida {
-  cidade: string;
-  custoKm: string;
 }
 
 @Entity('tech_profiles')
@@ -68,11 +68,14 @@ export class TechProfile {
   @Column({ type: 'varchar', nullable: true })
   bairro: string | null;
 
-  @Column({ type: 'varchar', nullable: true })
-  cidade: string | null;
+  // Cidade de residência — referência ao município (código IBGE).
+  @ManyToOne(() => City, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'cityCode' })
+  city: City | null;
 
-  @Column({ type: 'varchar', nullable: true })
-  estado: string | null;
+  @Index()
+  @Column({ type: 'int', nullable: true })
+  cityCode: number | null;
 
   @Column({ type: 'varchar', nullable: true })
   enderecoEncomendas: string | null;
@@ -97,8 +100,11 @@ export class TechProfile {
   @Column({ type: 'jsonb', nullable: true })
   ferramental: string[] | null;
 
-  @Column({ type: 'jsonb', nullable: true })
-  cidadesAtendidas: CidadeAtendida[] | null;
+  // Cidades atendidas — normalizado em tech_service_areas.
+  @OneToMany(() => TechServiceArea, (area) => area.techProfile, {
+    cascade: true,
+  })
+  servedCities: TechServiceArea[];
 
   @CreateDateColumn()
   createdAt: Date;

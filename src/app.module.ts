@@ -6,6 +6,8 @@ import { AppService } from './app.service';
 import { LandingConfigModule } from './landing-config/landing-config.module';
 import { AuthModule } from './auth/auth.module';
 import { TechniciansModule } from './technicians/technicians.module';
+import { ClientsModule } from './clients/clients.module';
+import { CitiesModule } from './cities/cities.module';
 
 @Module({
   imports: [
@@ -27,7 +29,9 @@ import { TechniciansModule } from './technicians/technicians.module';
       }),
     }),
     AuthModule,
+    CitiesModule,
     TechniciansModule,
+    ClientsModule,
     LandingConfigModule,
   ],
   controllers: [AppController],

@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsEmail,
+  IsInt,
   IsOptional,
   IsString,
   MinLength,
@@ -14,8 +15,8 @@ class EnderecoDto {
   @IsOptional() @IsString() numero?: string;
   @IsOptional() @IsString() complemento?: string;
   @IsOptional() @IsString() bairro?: string;
-  @IsOptional() @IsString() cidade?: string;
-  @IsOptional() @IsString() estado?: string;
+  // Cidade de residência por código IBGE (resolvido no cadastro).
+  @IsOptional() @IsInt() cityCode?: number;
 }
 
 class PixDto {
@@ -45,8 +46,10 @@ class EmpresaDto {
 }
 
 class CidadeAtendidaDto {
-  @IsString() cidade: string;
-  @IsString() custoKm: string;
+  // Cidade atendida por código IBGE.
+  @IsInt() cityCode: number;
+  // Custo de deslocamento em R$/km (string BR ou vazio).
+  @IsOptional() @IsString() custoKm?: string;
 }
 
 export class RegisterTechDto {
