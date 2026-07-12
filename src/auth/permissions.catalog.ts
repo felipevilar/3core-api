@@ -23,6 +23,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   inbox: 'Caixa de Entrada',
   landing: 'Landing Page',
   tecnicos: 'Técnicos',
+  financeiro: 'Financeiro',
   usuarios: 'Usuários',
   roles: 'Papéis',
   perfil: 'Perfil',
@@ -54,6 +55,11 @@ export const PERMISSIONS: PermissionDef[] = [
     label: 'Excluir atendimento',
     feature: 'atendimentos',
   },
+  {
+    key: 'atendimentos.gerenciar',
+    label: 'Gerenciar atendimentos (atribuir, fechar, reabrir, cancelar)',
+    feature: 'atendimentos',
+  },
 
   // Clientes (híbrido)
   { key: 'clientes.ver', label: 'Ver clientes', feature: 'clientes' },
@@ -81,6 +87,23 @@ export const PERMISSIONS: PermissionDef[] = [
     key: 'tecnicos.ver',
     label: 'Ver técnicos (lista e ficha)',
     feature: 'tecnicos',
+  },
+
+  // Financeiro
+  {
+    key: 'financeiro.ver',
+    label: 'Ver financeiro (custos, receita, margem, folha de todos)',
+    feature: 'financeiro',
+  },
+  {
+    key: 'financeiro.gerenciar',
+    label: 'Gerenciar financeiro (linhas, aprovar, marcar pago)',
+    feature: 'financeiro',
+  },
+  {
+    key: 'financeiro.ver_proprio',
+    label: 'Ver os próprios ganhos (técnico)',
+    feature: 'financeiro',
   },
 
   // Usuários (administração)
@@ -121,6 +144,7 @@ export const TECNICO_PERMISSION_KEYS: string[] = [
   'perfil.ver',
   'atendimentos.ver',
   'atendimentos.editar',
+  'financeiro.ver_proprio',
 ];
 
 /** Nomes dos papéis de sistema (não podem ser renomeados/excluídos pela UI). */

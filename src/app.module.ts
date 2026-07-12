@@ -8,6 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { TechniciansModule } from './technicians/technicians.module';
 import { ClientsModule } from './clients/clients.module';
 import { CitiesModule } from './cities/cities.module';
+import { ChamadosModule } from './chamados/chamados.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -29,9 +31,11 @@ import { CitiesModule } from './cities/cities.module';
       }),
     }),
     AuthModule,
+    NotificationsModule,
     CitiesModule,
     TechniciansModule,
     ClientsModule,
+    ChamadosModule,
     LandingConfigModule,
   ],
   controllers: [AppController],
