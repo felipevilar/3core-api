@@ -21,6 +21,7 @@ export type ChamadoEventTipo =
   | 'cancelado'
   | 'editado'
   | 'rat_anexado'
+  | 'rat_removido'
   | 'line_item_alterado'
   | 'financeiro_alterado'
   | 'pagamento_alterado';

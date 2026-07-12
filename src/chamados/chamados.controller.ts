@@ -19,6 +19,7 @@ import {
   CreateRatDto,
   FinalizarDto,
   MotivoDto,
+  RatUploadUrlDto,
   UpdateLineItemDto,
   UpdatePagamentoDto,
 } from './dto/chamado-actions.dto';
@@ -151,6 +152,18 @@ export class ChamadosController {
   }
 
   // ---- RAT ----
+  // 1) pede a URL assinada de upload; 2) sobe o arquivo direto ao Storage;
+  // 3) confirma os metadados via POST :id/rat.
+  @Post(':id/rat/upload-url')
+  @RequirePermissions('atendimentos.editar')
+  ratUploadUrl(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: RatUploadUrlDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.createRatUploadUrl(id, dto.fileName, user);
+  }
+
   @Post(':id/rat')
   @RequirePermissions('atendimentos.editar')
   addRat(
@@ -159,6 +172,26 @@ export class ChamadosController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.service.addRat(id, dto, user);
+  }
+
+  @Get(':id/rat/:ratId/download-url')
+  @RequirePermissions('atendimentos.ver')
+  ratDownloadUrl(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('ratId', ParseIntPipe) ratId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.getRatDownloadUrl(id, ratId, user);
+  }
+
+  @Delete(':id/rat/:ratId')
+  @RequirePermissions('atendimentos.editar')
+  removeRat(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('ratId', ParseIntPipe) ratId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.removeRat(id, ratId, user);
   }
 
   // ---- financeiro por chamado ----

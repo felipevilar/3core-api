@@ -38,6 +38,7 @@ import { NOTIFIER } from '../notifications/notifier';
 import type { Notifier } from '../notifications/notifier';
 import { multiplyMoney, parseBrMoney, sumMoney } from '../common/br-money';
 import { ROLE_SUPER_ADMIN } from '../auth/permissions.catalog';
+import { StorageService } from '../storage/storage.service';
 
 const PERM_GERENCIAR = 'atendimentos.gerenciar';
 const PERM_FIN_VER = 'financeiro.ver';
@@ -54,6 +55,7 @@ export class ChamadosService {
     private readonly ratRepo: Repository<ChamadoRat>,
     private readonly dataSource: DataSource,
     @Inject(NOTIFIER) private readonly notifier: Notifier,
+    private readonly storage: StorageService,
   ) {}
 
   // ============================================================ helpers
@@ -159,32 +161,81 @@ export class ChamadosService {
       .createQueryBuilder('c')
       .leftJoinAndSelect('c.client', 'client')
       .leftJoinAndSelect('c.city', 'city')
-      .orderBy('c.createdAt', 'DESC');
+      // id como desempate garante ordem total e paginação estável.
+      .orderBy('c.createdAt', 'DESC')
+      .addOrderBy('c.id', 'DESC');
 
     this.applyTecnicoScope(qb, user);
 
-    if (query.status)
-      qb.andWhere('c.status = :status', { status: query.status });
-    if (query.prioridade)
-      qb.andWhere('c.prioridade = :prio', { prio: query.prioridade });
+    if (query.status?.length)
+      qb.andWhere('c.status IN (:...statuses)', { statuses: query.status });
+    if (query.prioridade?.length)
+      qb.andWhere('c.prioridade IN (:...prios)', { prios: query.prioridade });
     if (query.clientId)
       qb.andWhere('c.clientId = :cid', { cid: query.clientId });
-    // tecnicoUserId só é respeitado para gerentes (técnico já é escopado).
-    if (query.tecnicoUserId && this.isGerente(user))
-      qb.andWhere('c.tecnicoUserId = :tid', { tid: query.tecnicoUserId });
-    if (query.uf) qb.andWhere('city.uf = :uf', { uf: query.uf.toUpperCase() });
-    if (query.periodo)
-      qb.andWhere('c.paymentPeriodo = :per', { per: query.periodo });
+    // Filtro por técnicos (multi) só vale para gerentes (técnico já é escopado).
+    if (query.tecnicoUserIds?.length && this.isGerente(user))
+      qb.andWhere('c.tecnicoUserId IN (:...tids)', {
+        tids: query.tecnicoUserIds,
+      });
+
+    // Intervalos de data (inclusivos: até o fim do dia "ate").
+    this.applyDateRange(qb, 'c.createdAt', query.criadoDe, query.criadoAte);
+    this.applyDateRange(
+      qb,
+      'c.agendadoPara',
+      query.agendadoDe,
+      query.agendadoAte,
+    );
+    this.applyDateRange(
+      qb,
+      'c.finalizadoEm',
+      query.finalizadoDe,
+      query.finalizadoAte,
+    );
+
     if (query.search)
       qb.andWhere(
         '(c.titulo ILIKE :s OR c.codigo ILIKE :s OR client.nome ILIKE :s)',
         { s: `%${query.search}%` },
       );
 
-    const rows = await qb.getMany();
-    return rows.map((c) =>
-      this.serialize(c, user, { includeLineItems: false }),
-    );
+    // Paginação (default 50; 50/100/200 validados no DTO).
+    const pageSize = query.pageSize ?? 50;
+    const page = query.page && query.page > 0 ? query.page : 1;
+    qb.skip((page - 1) * pageSize).take(pageSize);
+
+    const [rows, total] = await qb.getManyAndCount();
+    return {
+      items: rows.map((c) =>
+        this.serialize(c, user, { includeLineItems: false }),
+      ),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  /**
+   * Aplica um intervalo [de, ate] (datas YYYY-MM-DD, inclusivas) a uma coluna
+   * timestamptz, comparando pelo DIA no fuso America/Sao_Paulo — evita o
+   * deslocamento de ~3h que ocorreria se a sessão do Postgres estivesse em UTC.
+   */
+  private applyDateRange(
+    qb: SelectQueryBuilder<Chamado>,
+    column: string,
+    de?: string,
+    ate?: string,
+  ) {
+    // Sufixo único por coluna para não colidir os parâmetros.
+    const key = column.replace(/\W/g, '');
+    const localDate = `(${column} AT TIME ZONE 'America/Sao_Paulo')::date`;
+    if (de) {
+      qb.andWhere(`${localDate} >= :${key}De`, { [`${key}De`]: de });
+    }
+    if (ate) {
+      qb.andWhere(`${localDate} <= :${key}Ate`, { [`${key}Ate`]: ate });
+    }
   }
 
   async findOne(id: number, user: AuthUser) {
@@ -878,9 +929,9 @@ export class ChamadosService {
 
   // ============================================================ RAT
 
-  async addRat(id: number, dto: CreateRatDto, user: AuthUser) {
+  /** Quem pode anexar RAT: dono do chamado ou gerente, chamado não encerrado. */
+  private async assertPodeAnexarRat(id: number, user: AuthUser) {
     const chamado = await this.loadOrFail(id);
-    // Dono do chamado ou gerente.
     if (chamado.tecnicoUserId !== user.userId && !this.isGerente(user)) {
       throw new ForbiddenException('Sem permissão para anexar RAT');
     }
@@ -890,17 +941,48 @@ export class ChamadosService {
     ) {
       throw new ConflictException('Chamado encerrado');
     }
-    // Segurança: path deve ser confinado a este chamado; sem URLs absolutas.
+    return chamado;
+  }
+
+  /** Valida que um path é confinado a este chamado (sem traversal/URL absoluta). */
+  private assertPathDoChamado(id: number, path: string) {
     const prefix = `chamados/${id}/`;
-    if (
-      /^https?:\/\//i.test(dto.storagePath) ||
-      dto.storagePath.includes('..')
-    ) {
+    if (/^https?:\/\//i.test(path) || path.includes('..')) {
       throw new BadRequestException('storagePath inválido');
     }
-    if (!dto.storagePath.startsWith(prefix)) {
+    if (!path.startsWith(prefix)) {
       throw new BadRequestException(`storagePath deve começar com "${prefix}"`);
     }
+  }
+
+  /** Gera uma signed upload URL para o cliente subir o arquivo da RAT. */
+  async createRatUploadUrl(id: number, fileName: string, user: AuthUser) {
+    await this.assertPodeAnexarRat(id, user);
+    // Sanitiza o nome; o path é sempre montado pelo servidor (nunca do cliente).
+    const safeName = (fileName || 'rat').replace(/[^\w.-]+/g, '_').slice(-80);
+    // Timestamp determinístico do lado do servidor via SEQUENCE-free unique-ish:
+    // usa now() do banco para evitar Date.now() indisponível aqui.
+    const rows: { ts: string }[] = await this.dataSource.query(
+      `SELECT to_char(now(), 'YYYYMMDD"T"HH24MISSMS') AS ts`,
+    );
+    const path = `chamados/${id}/${rows[0].ts}-${safeName}`;
+    const signed = await this.storage.createSignedUploadUrl(path);
+    return { ...signed, fileName: safeName };
+  }
+
+  /** Gera uma signed download URL após validar o escopo de acesso. */
+  async getRatDownloadUrl(id: number, ratId: number, user: AuthUser) {
+    await this.assertAcessible(id, user);
+    const rat = await this.ratRepo.findOne({
+      where: { id: ratId, chamadoId: id },
+    });
+    if (!rat) throw new NotFoundException('RAT não encontrada');
+    return this.storage.createSignedDownloadUrl(rat.storagePath);
+  }
+
+  async addRat(id: number, dto: CreateRatDto, user: AuthUser) {
+    await this.assertPodeAnexarRat(id, user);
+    this.assertPathDoChamado(id, dto.storagePath);
     return this.dataSource.transaction(async (manager) => {
       const rat = await manager.getRepository(ChamadoRat).save(
         manager.getRepository(ChamadoRat).create({
@@ -919,6 +1001,34 @@ export class ChamadosService {
       });
       return rat;
     });
+  }
+
+  /** Remove uma RAT (registro + objeto no Storage). Dono ou gestor. */
+  async removeRat(id: number, ratId: number, user: AuthUser) {
+    await this.assertPodeAnexarRat(id, user);
+    const rat = await this.ratRepo.findOne({
+      where: { id: ratId, chamadoId: id },
+    });
+    if (!rat) throw new NotFoundException('RAT não encontrada');
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.getRepository(ChamadoRat).delete({ id: ratId });
+      await this.logEvent(manager, id, user, {
+        tipo: 'rat_removido',
+        metadata: { ratId, fileName: rat.fileName },
+      });
+    });
+
+    // Remove o objeto do Storage após o commit. Falha aqui só deixa um
+    // objeto órfão (inofensivo) e é logada — não desfaz a remoção do registro.
+    try {
+      await this.storage.remove(rat.storagePath);
+    } catch (e) {
+      this.logger.warn(
+        `RAT ${ratId} removida do banco, mas o objeto ${rat.storagePath} não foi apagado: ${(e as Error).message}`,
+      );
+    }
+    return { success: true };
   }
 
   // ============================================================ util transição dono

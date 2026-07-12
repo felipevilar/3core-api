@@ -10,6 +10,7 @@ import { ClientsModule } from './clients/clients.module';
 import { CitiesModule } from './cities/cities.module';
 import { ChamadosModule } from './chamados/chamados.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     }),
     AuthModule,
     NotificationsModule,
+    StorageModule,
     CitiesModule,
     TechniciansModule,
     ClientsModule,

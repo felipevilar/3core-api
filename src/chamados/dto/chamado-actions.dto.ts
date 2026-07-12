@@ -70,6 +70,11 @@ export class UpdatePagamentoDto {
   @IsOptional() @IsString() financeiroObs?: string;
 }
 
+/** Pedido de URL assinada de upload da RAT (só o nome do arquivo). */
+export class RatUploadUrlDto {
+  @IsString() @MinLength(1) fileName: string;
+}
+
 /** Anexo de RAT (metadados; arquivo já subiu ao Storage). */
 export class CreateRatDto {
   @IsString() storagePath: string;
