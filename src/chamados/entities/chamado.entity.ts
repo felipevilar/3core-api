@@ -73,6 +73,8 @@ export class Chamado {
   complemento: string | null;
   @Column({ type: 'varchar', nullable: true })
   bairro: string | null;
+  @Column({ type: 'varchar', nullable: true })
+  pontoReferencia: string | null;
 
   // ---- Conteúdo ----
   @Column({ type: 'varchar' })

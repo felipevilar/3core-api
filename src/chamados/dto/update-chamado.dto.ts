@@ -24,6 +24,7 @@ export class UpdateChamadoDto {
   @IsOptional() @IsString() numero?: string;
   @IsOptional() @IsString() complemento?: string;
   @IsOptional() @IsString() bairro?: string;
+  @IsOptional() @IsString() pontoReferencia?: string;
 
   @IsOptional() @IsISO8601() agendadoPara?: string;
 }

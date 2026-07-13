@@ -19,14 +19,16 @@ export class CreateChamadoDto {
 
   @IsOptional() @IsIn(PRIORIDADES) prioridade?: ChamadoPrioridade;
 
-  // Cidade do atendimento (default = cidade do cliente).
-  @IsOptional() @IsInt() cityCode?: number;
+  // Cidade do atendimento — obrigatória (pode diferir da cidade do cliente).
+  @IsInt() cityCode: number;
 
+  // Endereço do atendimento — todo opcional.
   @IsOptional() @IsString() cep?: string;
   @IsOptional() @IsString() logradouro?: string;
   @IsOptional() @IsString() numero?: string;
   @IsOptional() @IsString() complemento?: string;
   @IsOptional() @IsString() bairro?: string;
+  @IsOptional() @IsString() pontoReferencia?: string;
 
   @IsOptional() @IsISO8601() agendadoPara?: string;
 }

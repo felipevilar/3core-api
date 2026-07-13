@@ -318,6 +318,7 @@ export class ChamadosService {
         numero: dto.numero ?? client.numero ?? null,
         complemento: dto.complemento ?? client.complemento ?? null,
         bairro: dto.bairro ?? client.bairro ?? null,
+        pontoReferencia: dto.pontoReferencia ?? null,
         titulo: dto.titulo,
         descricao: dto.descricao ?? null,
         prioridade: dto.prioridade ?? 'media',
@@ -371,6 +372,7 @@ export class ChamadosService {
         numero: dto.numero ?? chamado.numero,
         complemento: dto.complemento ?? chamado.complemento,
         bairro: dto.bairro ?? chamado.bairro,
+        pontoReferencia: dto.pontoReferencia ?? chamado.pontoReferencia,
         agendadoPara: dto.agendadoPara
           ? new Date(dto.agendadoPara)
           : chamado.agendadoPara,
@@ -1120,6 +1122,7 @@ export class ChamadosService {
       numero: chamado.numero,
       complemento: chamado.complemento,
       bairro: chamado.bairro,
+      pontoReferencia: chamado.pontoReferencia,
       tecnicoUserId: chamado.tecnicoUserId,
       tecnicoNome: chamado.snapTecnicoNome ?? chamado.tecnicoUser?.name ?? null,
       atribuidoEm: chamado.atribuidoEm,

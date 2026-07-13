@@ -88,6 +88,11 @@ export const PERMISSIONS: PermissionDef[] = [
     label: 'Ver técnicos (lista e ficha)',
     feature: 'tecnicos',
   },
+  {
+    key: 'tecnicos.gerenciar',
+    label: 'Gerenciar técnicos (criar, editar, ativar/excluir)',
+    feature: 'tecnicos',
+  },
 
   // Financeiro
   {
