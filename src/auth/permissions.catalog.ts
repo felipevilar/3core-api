@@ -56,6 +56,16 @@ export const PERMISSIONS: PermissionDef[] = [
     feature: 'atendimentos',
   },
   {
+    key: 'atendimentos.ver_historico',
+    label: 'Ver histórico do atendimento',
+    feature: 'atendimentos',
+  },
+  {
+    key: 'atendimentos.ver_solicitacoes',
+    label: 'Ver e responder solicitações (aceitar/recusar, executar)',
+    feature: 'atendimentos',
+  },
+  {
     key: 'atendimentos.gerenciar',
     label: 'Gerenciar atendimentos (atribuir, fechar, reabrir, cancelar)',
     feature: 'atendimentos',
@@ -148,7 +158,8 @@ export const TECNICO_PERMISSION_KEYS: string[] = [
   'dashboard.ver',
   'perfil.ver',
   'atendimentos.ver',
-  'atendimentos.editar',
+  'atendimentos.ver_historico',
+  'atendimentos.ver_solicitacoes',
   'financeiro.ver_proprio',
 ];
 

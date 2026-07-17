@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsISO8601,
@@ -11,6 +12,7 @@ import { Transform, Type } from 'class-transformer';
 
 const STATUSES = [
   'aberto',
+  'solicitado',
   'atribuido',
   'a_caminho',
   'em_atendimento',
@@ -64,6 +66,16 @@ export class ListChamadosQueryDto {
   @IsArray()
   @IsInt({ each: true })
   tecnicoUserIds?: number[];
+
+  /** Filtra apenas solicitações pendentes de aceite (status = 'solicitado'). */
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return undefined;
+  })
+  @IsBoolean()
+  solicitacaoPendente?: boolean;
 
   // ---- Intervalos de data (ISO date, inclusivos) ----
   @IsOptional() @IsISO8601() criadoDe?: string;

@@ -14,6 +14,10 @@ const PRIORIDADES = ['baixa', 'media', 'alta', 'urgente'];
 export class UpdateChamadoDto {
   @IsOptional() @IsString() @MinLength(2) titulo?: string;
   @IsOptional() @IsString() descricao?: string;
+
+  @IsOptional() @IsString() chamadoInterno?: string;
+  @IsOptional() @IsString() chamadoExterno?: string;
+
   @IsOptional() @IsIn(PRIORIDADES) prioridade?: ChamadoPrioridade;
 
   // Trocar a cidade re-congela o snapshot de custo/km (só admin, no service).

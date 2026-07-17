@@ -23,7 +23,10 @@ import {
   UpdateLineItemDto,
   UpdatePagamentoDto,
 } from './dto/chamado-actions.dto';
-import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
+import {
+  RequireAnyPermission,
+  RequirePermissions,
+} from '../auth/decorators/require-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 
@@ -48,7 +51,7 @@ export class ChamadosController {
   }
 
   @Get(':id/eventos')
-  @RequirePermissions('atendimentos.ver')
+  @RequirePermissions('atendimentos.ver_historico')
   eventos(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: AuthUser,
@@ -96,6 +99,15 @@ export class ChamadosController {
     return this.service.atribuir(id, dto, user);
   }
 
+  @Post(':id/desatribuir')
+  @RequirePermissions('atendimentos.gerenciar')
+  desatribuir(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.desatribuir(id, user);
+  }
+
   @Post(':id/fechar')
   @RequirePermissions('atendimentos.gerenciar')
   fechar(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
@@ -122,9 +134,29 @@ export class ChamadosController {
     return this.service.cancelar(id, dto, user);
   }
 
+  // ---- aceite de solicitação (técnico dono) ----
+  @Post(':id/aceitar')
+  @RequirePermissions('atendimentos.ver_solicitacoes')
+  aceitar(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.aceitar(id, user);
+  }
+
+  @Post(':id/recusar')
+  @RequirePermissions('atendimentos.ver_solicitacoes')
+  recusar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: MotivoDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.recusar(id, dto, user);
+  }
+
   // ---- transições do técnico (dono) ----
   @Post(':id/a-caminho')
-  @RequirePermissions('atendimentos.editar')
+  @RequirePermissions('atendimentos.ver_solicitacoes')
   aCaminho(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: AuthUser,
@@ -133,7 +165,7 @@ export class ChamadosController {
   }
 
   @Post(':id/chegada')
-  @RequirePermissions('atendimentos.editar')
+  @RequirePermissions('atendimentos.ver_solicitacoes')
   chegada(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: AuthUser,
@@ -142,7 +174,7 @@ export class ChamadosController {
   }
 
   @Post(':id/finalizar')
-  @RequirePermissions('atendimentos.editar')
+  @RequirePermissions('atendimentos.ver_solicitacoes')
   finalizar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: FinalizarDto,
@@ -154,8 +186,10 @@ export class ChamadosController {
   // ---- RAT ----
   // 1) pede a URL assinada de upload; 2) sobe o arquivo direto ao Storage;
   // 3) confirma os metadados via POST :id/rat.
+  // Anexar/remover: técnico dono (ver_solicitacoes) OU gestor (editar) — o
+  // service confere o vínculo dono/gestor; aqui só barramos quem não tem nenhuma.
   @Post(':id/rat/upload-url')
-  @RequirePermissions('atendimentos.editar')
+  @RequireAnyPermission('atendimentos.ver_solicitacoes', 'atendimentos.editar')
   ratUploadUrl(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: RatUploadUrlDto,
@@ -165,7 +199,7 @@ export class ChamadosController {
   }
 
   @Post(':id/rat')
-  @RequirePermissions('atendimentos.editar')
+  @RequireAnyPermission('atendimentos.ver_solicitacoes', 'atendimentos.editar')
   addRat(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateRatDto,
@@ -185,7 +219,7 @@ export class ChamadosController {
   }
 
   @Delete(':id/rat/:ratId')
-  @RequirePermissions('atendimentos.editar')
+  @RequireAnyPermission('atendimentos.ver_solicitacoes', 'atendimentos.editar')
   removeRat(
     @Param('id', ParseIntPipe) id: number,
     @Param('ratId', ParseIntPipe) ratId: number,

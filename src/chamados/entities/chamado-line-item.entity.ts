@@ -14,8 +14,8 @@ import { Chamado } from './chamado.entity';
 export type LineItemNatureza = 'custo' | 'receita';
 
 export type LineItemTipo =
-  | 'chamada_fixa'
-  | 'mao_de_obra'
+  | 'servico'
+  | 'material'
   | 'deslocamento'
   | 'extra'
   | 'ajuste';
