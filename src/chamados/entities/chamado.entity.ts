@@ -19,6 +19,7 @@ import { ChamadoRat } from './chamado-rat.entity';
 
 export type ChamadoStatus =
   | 'aberto'
+  | 'solicitado'
   | 'atribuido'
   | 'a_caminho'
   | 'em_atendimento'
@@ -82,6 +83,12 @@ export class Chamado {
 
   @Column({ type: 'text', nullable: true })
   descricao: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  chamadoInterno: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  chamadoExterno: string | null;
 
   @Column({ type: 'varchar', default: 'media' })
   prioridade: ChamadoPrioridade;

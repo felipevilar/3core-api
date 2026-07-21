@@ -17,6 +17,9 @@ export class CreateChamadoDto {
 
   @IsOptional() @IsString() descricao?: string;
 
+  @IsOptional() @IsString() chamadoInterno?: string;
+  @IsOptional() @IsString() chamadoExterno?: string;
+
   @IsOptional() @IsIn(PRIORIDADES) prioridade?: ChamadoPrioridade;
 
   // Cidade do atendimento — obrigatória (pode diferir da cidade do cliente).

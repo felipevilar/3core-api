@@ -145,6 +145,19 @@ export class ChamadosService {
     });
   }
 
+  /**
+   * Aplica um campo de texto opcional de um DTO de edição: `undefined` mantém o
+   * valor atual; string vazia (ou espaços) limpa (=> null); senão usa o novo.
+   */
+  private applyOptionalText(
+    incoming: string | undefined,
+    current: string | null,
+  ): string | null {
+    if (incoming === undefined) return current;
+    const trimmed = incoming.trim();
+    return trimmed.length ? trimmed : null;
+  }
+
   /** Garante que o chamado não está com valores congelados (fechado). */
   private assertNaoCongelado(chamado: Chamado) {
     if (chamado.valoresCongeladosEm) {
@@ -167,8 +180,18 @@ export class ChamadosService {
 
     this.applyTecnicoScope(qb, user);
 
-    if (query.status?.length)
-      qb.andWhere('c.status IN (:...statuses)', { statuses: query.status });
+    if (query.solicitacaoPendente === true) {
+      // Tela de Solicitações: só chamados aguardando aceite do técnico.
+      qb.andWhere("c.status = 'solicitado'");
+    } else {
+      // Chamados "solicitados" ficam OCULTOS do técnico em /chamados — ele os
+      // vê apenas na tela de Solicitações. O gestor continua enxergando.
+      if (!this.isGerente(user)) {
+        qb.andWhere("c.status <> 'solicitado'");
+      }
+      if (query.status?.length)
+        qb.andWhere('c.status IN (:...statuses)', { statuses: query.status });
+    }
     if (query.prioridade?.length)
       qb.andWhere('c.prioridade IN (:...prios)', { prios: query.prioridade });
     if (query.clientId)
@@ -260,7 +283,7 @@ export class ChamadosService {
     await this.assertAcessible(id, user);
     const eventos = await this.dataSource.getRepository(ChamadoEvent).find({
       where: { chamadoId: id },
-      order: { createdAt: 'ASC' },
+      order: { createdAt: 'DESC' },
     });
     const podeFin = user.permissions.includes(PERM_FIN_VER);
     return eventos.map((e) => ({
@@ -321,6 +344,8 @@ export class ChamadosService {
         pontoReferencia: dto.pontoReferencia ?? null,
         titulo: dto.titulo,
         descricao: dto.descricao ?? null,
+        chamadoInterno: dto.chamadoInterno ?? null,
+        chamadoExterno: dto.chamadoExterno ?? null,
         prioridade: dto.prioridade ?? 'media',
         status: 'aberto',
         agendadoPara: dto.agendadoPara ? new Date(dto.agendadoPara) : null,
@@ -363,19 +388,38 @@ export class ChamadosService {
       }
 
       const before = { cityCode: chamado.cityCode };
+      // Campos de texto opcionais: `undefined` mantém; vazio/null limpa.
       Object.assign(chamado, {
         titulo: dto.titulo ?? chamado.titulo,
-        descricao: dto.descricao ?? chamado.descricao,
+        descricao: this.applyOptionalText(dto.descricao, chamado.descricao),
+        chamadoInterno: this.applyOptionalText(
+          dto.chamadoInterno,
+          chamado.chamadoInterno,
+        ),
+        chamadoExterno: this.applyOptionalText(
+          dto.chamadoExterno,
+          chamado.chamadoExterno,
+        ),
         prioridade: dto.prioridade ?? chamado.prioridade,
-        cep: dto.cep ?? chamado.cep,
-        logradouro: dto.logradouro ?? chamado.logradouro,
-        numero: dto.numero ?? chamado.numero,
-        complemento: dto.complemento ?? chamado.complemento,
-        bairro: dto.bairro ?? chamado.bairro,
-        pontoReferencia: dto.pontoReferencia ?? chamado.pontoReferencia,
-        agendadoPara: dto.agendadoPara
-          ? new Date(dto.agendadoPara)
-          : chamado.agendadoPara,
+        cep: this.applyOptionalText(dto.cep, chamado.cep),
+        logradouro: this.applyOptionalText(dto.logradouro, chamado.logradouro),
+        numero: this.applyOptionalText(dto.numero, chamado.numero),
+        complemento: this.applyOptionalText(
+          dto.complemento,
+          chamado.complemento,
+        ),
+        bairro: this.applyOptionalText(dto.bairro, chamado.bairro),
+        pontoReferencia: this.applyOptionalText(
+          dto.pontoReferencia,
+          chamado.pontoReferencia,
+        ),
+        // `undefined` mantém; `null`/'' limpa o agendamento.
+        agendadoPara:
+          dto.agendadoPara === undefined
+            ? chamado.agendadoPara
+            : dto.agendadoPara
+              ? new Date(dto.agendadoPara)
+              : null,
       });
 
       const cidadeMudou =
@@ -431,6 +475,7 @@ export class ChamadosService {
       const chamado = await this.loadOrFail(id, manager);
       this.assertTransicao(chamado, [
         'aberto',
+        'solicitado',
         'atribuido',
         'a_caminho',
         'em_atendimento',
@@ -470,7 +515,9 @@ export class ChamadosService {
       chamado.snapValorHora = snapValorHora;
       chamado.snapCustoPorKm = snapCustoPorKm;
       chamado.snapCustoKmCidade = snapCustoKmCidade;
-      chamado.status = 'atribuido';
+      // Vai para "solicitado": aguarda o técnico aceitar antes de virar
+      // "atribuido" (e ficar visível para ele na lista de chamados).
+      chamado.status = 'solicitado';
       chamado.atribuidoEm = new Date();
       // Reatribuição limpa progresso e regenera linhas auto.
       chamado.aCaminhoEm = null;
@@ -488,8 +535,8 @@ export class ChamadosService {
         await manager.getRepository(ChamadoLineItem).insert({
           chamadoId: id,
           natureza: 'custo',
-          tipo: 'chamada_fixa',
-          descricao: 'Chamada fixa',
+          tipo: 'servico',
+          descricao: 'Serviço fixo',
           quantidade: '1',
           valorUnitario: chamadaFixa,
           valorTotal: chamadaFixa,
@@ -502,7 +549,7 @@ export class ChamadosService {
       await this.logEvent(manager, id, user, {
         tipo: reatribuicao ? 'reatribuido' : 'atribuido',
         statusAnterior,
-        statusNovo: 'atribuido',
+        statusNovo: 'solicitado',
         metadata: {
           tecnicoUserId: tecnico.id,
           snapValorHora,
@@ -529,8 +576,59 @@ export class ChamadosService {
     });
   }
 
+  /**
+   * Remove o técnico do chamado (volta para "aberto"). Descarta o snapshot de
+   * tarifas e as linhas auto (chamada fixa / mão de obra / deslocamento), que
+   * dependem do técnico; as linhas manuais são preservadas. Só gestor.
+   */
+  async desatribuir(id: number, user: AuthUser) {
+    return this.dataSource.transaction(async (manager) => {
+      const chamado = await this.loadOrFail(id, manager);
+      this.assertTransicao(chamado, [
+        'solicitado',
+        'atribuido',
+        'a_caminho',
+        'em_atendimento',
+      ]);
+      if (!chamado.tecnicoUserId) {
+        throw new ConflictException('Chamado não possui técnico atribuído');
+      }
+
+      const statusAnterior = chamado.status;
+      const tecnicoRemovidoId = chamado.tecnicoUserId;
+      chamado.tecnicoUserId = null;
+      chamado.techProfileId = null;
+      chamado.snapTecnicoNome = null;
+      chamado.snapTecnicoEmail = null;
+      chamado.snapValorHora = null;
+      chamado.snapCustoPorKm = null;
+      chamado.snapCustoKmCidade = null;
+      chamado.status = 'aberto';
+      chamado.atribuidoEm = null;
+      chamado.aCaminhoEm = null;
+      chamado.chegadaEm = null;
+      await manager.getRepository(Chamado).save(chamado);
+
+      // Linhas auto (dependem do técnico) são descartadas; manuais permanecem.
+      await manager
+        .getRepository(ChamadoLineItem)
+        .delete({ chamadoId: id, origem: 'auto_snapshot' });
+      await this.recomputeTotals(manager, id);
+
+      await this.logEvent(manager, id, user, {
+        tipo: 'desatribuido',
+        statusAnterior,
+        statusNovo: 'aberto',
+        metadata: { tecnicoRemovidoId },
+      });
+
+      return this.findOneTx(manager, id, user);
+    });
+  }
+
   /** Ações do próprio técnico (a caminho / chegada). */
   async marcarACaminho(id: number, user: AuthUser) {
+    // Só a partir de 'atribuido' (= já aceito pelo técnico).
     return this.transicaoDono(id, user, ['atribuido'], (chamado) => {
       chamado.status = 'a_caminho';
       chamado.aCaminhoEm = new Date();
@@ -569,7 +667,7 @@ export class ChamadosService {
       await manager.getRepository(ChamadoLineItem).delete({
         chamadoId: id,
         origem: 'auto_snapshot',
-        tipo: 'mao_de_obra',
+        tipo: 'servico',
       });
       await manager.getRepository(ChamadoLineItem).delete({
         chamadoId: id,
@@ -582,7 +680,7 @@ export class ChamadosService {
         await manager.getRepository(ChamadoLineItem).insert({
           chamadoId: id,
           natureza: 'custo',
-          tipo: 'mao_de_obra',
+          tipo: 'servico',
           descricao: `Mão de obra (${horas}h)`,
           quantidade: horas,
           valorUnitario: valorHora,
@@ -762,6 +860,7 @@ export class ChamadosService {
       const chamado = await this.loadOrFail(id, manager);
       this.assertTransicao(chamado, [
         'aberto',
+        'solicitado',
         'atribuido',
         'a_caminho',
         'em_atendimento',
@@ -777,6 +876,55 @@ export class ChamadosService {
         tipo: 'cancelado',
         statusAnterior,
         statusNovo: 'cancelado',
+        nota: dto.motivo,
+      });
+      return this.findOneTx(manager, id, user);
+    });
+  }
+
+  // ============================================================ aceite de solicitação
+
+  /** Técnico aceita a solicitação: 'solicitado' -> 'atribuido'. */
+  async aceitar(id: number, user: AuthUser) {
+    return this.transicaoDono(id, user, ['solicitado'], (chamado) => {
+      chamado.status = 'atribuido';
+      return {
+        tipo: 'solicitacao_aceita',
+        statusNovo: 'atribuido',
+      };
+    });
+  }
+
+  /** Técnico recusa a solicitação: chamado volta para 'aberto' sem técnico. */
+  async recusar(id: number, dto: MotivoDto, user: AuthUser) {
+    return this.dataSource.transaction(async (manager) => {
+      const chamado = await this.loadOrFail(id, manager);
+      this.assertDono(chamado, user);
+      this.assertTransicao(chamado, ['solicitado']);
+
+      const statusAnterior = chamado.status;
+      chamado.tecnicoUserId = null;
+      chamado.techProfileId = null;
+      chamado.snapTecnicoNome = null;
+      chamado.snapTecnicoEmail = null;
+      chamado.snapValorHora = null;
+      chamado.snapCustoPorKm = null;
+      chamado.snapCustoKmCidade = null;
+      chamado.status = 'aberto';
+      chamado.atribuidoEm = null;
+      chamado.aCaminhoEm = null;
+      chamado.chegadaEm = null;
+      await manager.getRepository(Chamado).save(chamado);
+
+      await manager
+        .getRepository(ChamadoLineItem)
+        .delete({ chamadoId: id, origem: 'auto_snapshot' });
+      await this.recomputeTotals(manager, id);
+
+      await this.logEvent(manager, id, user, {
+        tipo: 'solicitacao_recusada',
+        statusAnterior,
+        statusNovo: 'aberto',
         nota: dto.motivo,
       });
       return this.findOneTx(manager, id, user);
@@ -1098,6 +1246,8 @@ export class ChamadosService {
       codigo: chamado.codigo,
       titulo: chamado.titulo,
       descricao: chamado.descricao,
+      chamadoInterno: chamado.chamadoInterno,
+      chamadoExterno: chamado.chamadoExterno,
       prioridade: chamado.prioridade,
       status: chamado.status,
       agendadoPara: chamado.agendadoPara,

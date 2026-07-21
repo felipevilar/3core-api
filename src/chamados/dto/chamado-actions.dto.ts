@@ -29,20 +29,14 @@ export class MotivoDto {
 }
 
 const NATUREZAS = ['custo', 'receita'];
-const TIPOS = [
-  'chamada_fixa',
-  'mao_de_obra',
-  'deslocamento',
-  'extra',
-  'ajuste',
-];
+const TIPOS = ['servico', 'material', 'deslocamento', 'extra', 'ajuste'];
 
 /** Linha financeira manual (admin). */
 export class CreateLineItemDto {
   @IsIn(NATUREZAS) natureza: 'custo' | 'receita';
   @IsIn(TIPOS) tipo:
-    | 'chamada_fixa'
-    | 'mao_de_obra'
+    | 'servico'
+    | 'material'
     | 'deslocamento'
     | 'extra'
     | 'ajuste';
