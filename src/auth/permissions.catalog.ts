@@ -123,6 +123,7 @@ export const PERMISSIONS: PermissionDef[] = [
 
   // Usuários (administração)
   { key: 'usuarios.ver', label: 'Ver usuários', feature: 'usuarios' },
+  { key: 'usuarios.criar', label: 'Criar usuário', feature: 'usuarios' },
   {
     key: 'usuarios.gerenciar',
     label: 'Gerenciar usuários (papel, ativar/desativar)',

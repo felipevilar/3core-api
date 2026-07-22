@@ -13,6 +13,13 @@ import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { FEATURE_LABELS, ROLE_SUPER_ADMIN } from './permissions.catalog';
 
+/**
+ * Permissões que o super_admin NUNCA pode perder — sem elas ninguém consegue
+ * reconceder acesso pela UI e o sistema fica trancado (só banco/migration
+ * resolveria). Mantidas como piso de segurança na edição do papel.
+ */
+const SUPER_ADMIN_REQUIRED_KEYS = ['roles.ver', 'roles.gerenciar'];
+
 @Injectable()
 export class RolesService {
   constructor(
@@ -65,15 +72,9 @@ export class RolesService {
     if (!role) {
       throw new NotFoundException('Papel não encontrado');
     }
-    // O super_admin é totalmente imutável (evita que alguém remova as próprias
-    // permissões e se tranque para fora do sistema).
-    if (role.name === ROLE_SUPER_ADMIN) {
-      throw new ForbiddenException(
-        'O papel super_admin não pode ser alterado',
-      );
-    }
-    // Demais papéis de sistema (ex.: tecnico) têm o nome travado — o cadastro
-    // de técnicos resolve o papel por nome —, mas as permissões são editáveis.
+    // Papéis de sistema (super_admin, tecnico) têm o nome travado — o cadastro
+    // de técnicos e o gate de auth resolvem o papel por nome. As permissões são
+    // editáveis, inclusive as do super_admin.
     if (role.isSystem && dto.name !== undefined && dto.name !== role.name) {
       throw new ForbiddenException(
         'O nome de um papel de sistema não pode ser alterado',
@@ -82,6 +83,19 @@ export class RolesService {
     if (dto.name !== undefined) role.name = dto.name;
     if (dto.description !== undefined) role.description = dto.description;
     if (dto.permissionKeys !== undefined) {
+      // O super_admin pode ser reconfigurado, mas nunca pode perder o acesso à
+      // própria gestão de papéis — senão ninguém reconcede nada pela UI e o
+      // sistema fica trancado (só banco/migration resolveria).
+      if (role.name === ROLE_SUPER_ADMIN) {
+        const required = SUPER_ADMIN_REQUIRED_KEYS.filter(
+          (k) => !dto.permissionKeys!.includes(k),
+        );
+        if (required.length > 0) {
+          throw new ForbiddenException(
+            `O super_admin não pode perder as permissões: ${required.join(', ')}`,
+          );
+        }
+      }
       role.permissions = await this.resolvePermissions(dto.permissionKeys);
     }
     return this.roleRepo.save(role);
