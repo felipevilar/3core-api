@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { StorageClient } from '@supabase/storage-js';
 
 export const RATS_BUCKET = 'rats';
+export const AVATARS_BUCKET = 'avatars';
 
 /**
  * Acesso ao Supabase Storage usando a service_role key (só no servidor).
@@ -47,9 +48,9 @@ export class StorageService {
   }
 
   /** URL assinada para o cliente subir o arquivo diretamente ao bucket. */
-  async createSignedUploadUrl(path: string) {
+  async createSignedUploadUrl(path: string, bucket = RATS_BUCKET) {
     const { data, error } = await this.ensure()
-      .from(RATS_BUCKET)
+      .from(bucket)
       .createSignedUploadUrl(path);
     if (error || !data) {
       throw new InternalServerErrorException(
@@ -60,9 +61,13 @@ export class StorageService {
   }
 
   /** URL assinada de leitura (download), validade em segundos. */
-  async createSignedDownloadUrl(path: string, expiresInSeconds = 300) {
+  async createSignedDownloadUrl(
+    path: string,
+    expiresInSeconds = 300,
+    bucket = RATS_BUCKET,
+  ) {
     const { data, error } = await this.ensure()
-      .from(RATS_BUCKET)
+      .from(bucket)
       .createSignedUrl(path, expiresInSeconds);
     if (error || !data) {
       throw new InternalServerErrorException(
@@ -72,8 +77,30 @@ export class StorageService {
     return { signedUrl: data.signedUrl };
   }
 
+  /** Gera múltiplas URLs assinadas de leitura em uma única chamada ao Storage. */
+  async createSignedDownloadUrls(
+    paths: string[],
+    expiresInSeconds = 300,
+    bucket = RATS_BUCKET,
+  ): Promise<Record<string, string>> {
+    if (!paths.length) return {};
+    const { data, error } = await this.ensure()
+      .from(bucket)
+      .createSignedUrls(paths, expiresInSeconds);
+    if (error || !data) {
+      throw new InternalServerErrorException(
+        `Falha ao gerar URLs de download: ${error?.message ?? 'desconhecida'}`,
+      );
+    }
+    return Object.fromEntries(
+      data
+        .filter((item) => item.signedUrl)
+        .map((item) => [item.path, item.signedUrl]),
+    );
+  }
+
   /** Remove um objeto (usado se um upload for cancelado/substituído). */
-  async remove(path: string) {
-    await this.ensure().from(RATS_BUCKET).remove([path]);
+  async remove(path: string, bucket = RATS_BUCKET) {
+    await this.ensure().from(bucket).remove([path]);
   }
 }
