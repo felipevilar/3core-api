@@ -29,8 +29,11 @@ export type ChamadoStatus =
 
 export type ChamadoPrioridade = 'baixa' | 'media' | 'alta' | 'urgente';
 
-/** Ciclo de pagamento — SEPARADO do status operacional do chamado. */
+/** Ciclo de pagamento AO TÉCNICO — SEPARADO do status operacional do chamado. */
 export type PaymentStatus = 'nao_aplicavel' | 'pendente' | 'aprovado' | 'pago';
+
+/** Recebimento DO CLIENTE — se a receita do chamado já foi paga por ele. */
+export type ClientePaymentStatus = 'pendente' | 'pago';
 
 /**
  * Chamado (ticket de atendimento) — raiz agregada. Guarda o cliente, o técnico
@@ -177,6 +180,14 @@ export class Chamado {
   aprovadoEm: Date | null;
   @Column({ type: 'timestamptz', nullable: true })
   pagoEm: Date | null;
+
+  // ---- Recebimento do cliente (ciclo separado do pagamento ao técnico) ----
+  @Index()
+  @Column({ type: 'varchar', default: 'pendente' })
+  clientePaymentStatus: ClientePaymentStatus;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  clientePagoEm: Date | null;
 
   @Column({ type: 'text', nullable: true })
   financeiroObs: string | null;
