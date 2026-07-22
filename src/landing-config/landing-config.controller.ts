@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
 } from '@nestjs/common';
 import { LandingConfigService } from './landing-config.service';
 import { Public } from '../auth/decorators/public.decorator';
@@ -66,5 +67,17 @@ export class LandingConfigController {
   @RequirePermissions('landing.gerenciar')
   removeItem(@Param('id', ParseIntPipe) id: number) {
     return this.service.removeItem(id);
+  }
+
+  @Get('alert-recipients')
+  @RequirePermissions('landing.gerenciar')
+  findAlertRecipients() {
+    return this.service.findAlertRecipients();
+  }
+
+  @Put('alert-recipients')
+  @RequirePermissions('landing.gerenciar')
+  setAlertRecipients(@Body() body: { userIds: number[] }) {
+    return this.service.setAlertRecipients(body.userIds);
   }
 }

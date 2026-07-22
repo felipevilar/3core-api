@@ -18,6 +18,7 @@ import { UpdateTechnicianDto } from './dto/update-technician.dto';
 import { ROLE_TECNICO } from '../auth/permissions.catalog';
 import { parseBrMoney } from '../common/br-money';
 import { AVATARS_BUCKET, StorageService } from '../storage/storage.service';
+import { LandingConfigService } from '../landing-config/landing-config.service';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -41,6 +42,7 @@ export class TechniciansService {
     private readonly roleRepo: Repository<Role>,
     private readonly dataSource: DataSource,
     private readonly storageService: StorageService,
+    private readonly landingConfigService: LandingConfigService,
   ) {}
 
   /**
@@ -208,7 +210,7 @@ export class TechniciansService {
     // Deduplica cidades atendidas por código (unicidade em tech_service_areas).
     const servedCities = this.dedupeServiceAreas(dto.cidadesAtendidas);
 
-    return this.dataSource.transaction(async (manager) => {
+    const registration = await this.dataSource.transaction(async (manager) => {
       const user = manager.create(User, {
         email: dto.email,
         passwordHash,
@@ -257,6 +259,25 @@ export class TechniciansService {
         name: savedUser.name,
       };
     });
+
+    this.notifyNewTechRegistration(registration.name, registration.email).catch(() => {});
+
+    return registration;
+  }
+
+  private async notifyNewTechRegistration(
+    techName: string,
+    techEmail: string,
+  ): Promise<void> {
+    const recipients =
+      await this.landingConfigService.findAlertRecipientEmails();
+    if (!recipients.length) return;
+
+    await this.landingConfigService.sendNewTechAlert(
+      recipients,
+      techName,
+      techEmail,
+    );
   }
 
   /**

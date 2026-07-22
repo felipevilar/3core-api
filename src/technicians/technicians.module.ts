@@ -9,10 +9,12 @@ import {
   TechniciansAdminController,
   TechniciansController,
 } from './technicians.controller';
+import { LandingConfigModule } from '../landing-config/landing-config.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([TechProfile, TechServiceArea, User, Role]),
+    LandingConfigModule,
   ],
   controllers: [TechniciansController, TechniciansAdminController],
   providers: [TechniciansService],
