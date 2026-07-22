@@ -8,6 +8,13 @@ import type { AuthUser } from '../auth/decorators/current-user.decorator';
 export class FinanceiroController {
   constructor(private readonly service: FinanceiroService) {}
 
+  /** Painel consolidado de um período (KPIs + atendimentos). */
+  @Get('overview')
+  @RequirePermissions('financeiro.ver')
+  overview(@Query('de') de?: string, @Query('ate') ate?: string) {
+    return this.service.overview({ de, ate });
+  }
+
   /** Folha de todos os técnicos (admin/financeiro). */
   @Get('payout')
   @RequirePermissions('financeiro.ver')

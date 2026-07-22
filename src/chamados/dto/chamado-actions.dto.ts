@@ -53,12 +53,17 @@ export class UpdateLineItemDto {
 }
 
 const PAYMENT_STATUSES = ['pendente', 'aprovado', 'pago'];
+const CLIENTE_PAYMENT_STATUSES = ['pendente', 'pago'];
 
-/** Muda o ciclo de pagamento e/ou a competência. */
+/** Muda o ciclo de pagamento (técnico e/ou cliente) e/ou a competência. */
 export class UpdatePagamentoDto {
   @IsOptional() @IsIn(PAYMENT_STATUSES) paymentStatus?:
     | 'pendente'
     | 'aprovado'
+    | 'pago';
+  // Recebimento do cliente (receita): pendente <-> pago.
+  @IsOptional() @IsIn(CLIENTE_PAYMENT_STATUSES) clientePaymentStatus?:
+    | 'pendente'
     | 'pago';
   @IsOptional() @IsString() @Length(7, 7) paymentPeriodo?: string;
   @IsOptional() @IsString() financeiroObs?: string;

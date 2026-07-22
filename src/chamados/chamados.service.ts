@@ -754,6 +754,9 @@ export class ChamadosService {
       refreshed.valoresCongeladosEm = new Date();
       refreshed.paymentStatus = 'pendente';
       refreshed.paymentPeriodo = this.competenciaDe(base);
+      // Recebimento do cliente começa pendente ao fechar.
+      refreshed.clientePaymentStatus = 'pendente';
+      refreshed.clientePagoEm = null;
       await manager.getRepository(Chamado).save(refreshed);
 
       await this.logEvent(manager, id, user, {
@@ -819,6 +822,9 @@ export class ChamadosService {
         chamado.paymentPeriodo = null;
         chamado.aprovadoEm = null;
         chamado.pagoEm = null;
+        // Recebimento do cliente também volta ao estado inicial.
+        chamado.clientePaymentStatus = 'pendente';
+        chamado.clientePagoEm = null;
       }
       chamado.finalizadoEm =
         destino === 'em_atendimento' ? null : chamado.finalizadoEm;
@@ -1022,6 +1028,7 @@ export class ChamadosService {
       const antes = {
         paymentStatus: chamado.paymentStatus,
         paymentPeriodo: chamado.paymentPeriodo,
+        clientePaymentStatus: chamado.clientePaymentStatus,
       };
 
       if (dto.paymentPeriodo !== undefined) {
@@ -1049,6 +1056,14 @@ export class ChamadosService {
         }
         if (dto.paymentStatus === 'pago') chamado.pagoEm = new Date();
       }
+
+      // Recebimento do cliente (independente do pagamento ao técnico).
+      if (dto.clientePaymentStatus) {
+        chamado.clientePaymentStatus = dto.clientePaymentStatus;
+        chamado.clientePagoEm =
+          dto.clientePaymentStatus === 'pago' ? new Date() : null;
+      }
+
       await manager.getRepository(Chamado).save(chamado);
       await this.logEvent(manager, id, user, {
         tipo: 'pagamento_alterado',
@@ -1057,6 +1072,7 @@ export class ChamadosService {
           depois: {
             paymentStatus: chamado.paymentStatus,
             paymentPeriodo: chamado.paymentPeriodo,
+            clientePaymentStatus: chamado.clientePaymentStatus,
           },
         },
       });
@@ -1297,13 +1313,15 @@ export class ChamadosService {
       version: chamado.version,
     };
 
-    // Receita/margem só para quem tem financeiro.ver.
+    // Receita/margem e recebimento do cliente só para quem tem financeiro.ver.
     if (podeFin) {
       base.valorClienteTotal = chamado.valorClienteTotal;
       base.margem = sumMoney([
         chamado.valorClienteTotal,
         `-${chamado.custoTecnicoTotal}`,
       ]);
+      base.clientePaymentStatus = chamado.clientePaymentStatus;
+      base.clientePagoEm = chamado.clientePagoEm;
       base.financeiroObs = chamado.financeiroObs;
     }
 
