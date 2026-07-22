@@ -28,6 +28,12 @@ export class User {
   @Column({ type: 'varchar' })
   name: string;
 
+  @Column({ type: 'text', nullable: true })
+  bio: string | null;
+
+  @Column({ type: 'varchar', nullable: true, name: 'avatar_path' })
+  avatarPath: string | null;
+
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
 

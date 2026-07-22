@@ -17,6 +17,7 @@ import { CreateTechnicianDto } from './dto/create-technician.dto';
 import { UpdateTechnicianDto } from './dto/update-technician.dto';
 import { ROLE_TECNICO } from '../auth/permissions.catalog';
 import { parseBrMoney } from '../common/br-money';
+import { AVATARS_BUCKET, StorageService } from '../storage/storage.service';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -39,6 +40,7 @@ export class TechniciansService {
     @InjectRepository(Role)
     private readonly roleRepo: Repository<Role>,
     private readonly dataSource: DataSource,
+    private readonly storageService: StorageService,
   ) {}
 
   /**
@@ -106,6 +108,7 @@ export class TechniciansService {
         'city.uf AS uf',
         'p.areasAtuacao AS "areasAtuacao"',
         'p.createdAt AS "createdAt"',
+        'u.avatar_path AS "avatarPath"',
         // Cidades atendidas como array agregado (nome + uf) para a linha.
         `COALESCE((
           SELECT json_agg(json_build_object('code', sc.code, 'nome', sc.nome, 'uf', sc.uf) ORDER BY sc.nome)
@@ -119,7 +122,30 @@ export class TechniciansService {
       .offset((page - 1) * pageSize)
       .limit(pageSize);
 
-    const items = await qb.getRawMany();
+    const rawItems = await qb.getRawMany();
+
+    const paths = rawItems
+      .map((r) => r.avatarPath as string | null)
+      .filter((p): p is string => !!p);
+    let urlMap: Record<string, string> = {};
+    if (paths.length) {
+      try {
+        urlMap = await this.storageService.createSignedDownloadUrls(
+          paths,
+          300,
+          AVATARS_BUCKET,
+        );
+      } catch {
+        // storage não configurado — lista sem avatares
+      }
+    }
+
+    const items = rawItems.map((r) => ({
+      ...r,
+      avatarUrl: r.avatarPath ? (urlMap[r.avatarPath] ?? null) : null,
+      avatarPath: undefined,
+    }));
+
     return { items, total, page, pageSize };
   }
 
@@ -136,7 +162,22 @@ export class TechniciansService {
     if (!profile) {
       throw new NotFoundException('Técnico não encontrado');
     }
-    return profile;
+
+    let avatarUrl: string | null = null;
+    if (profile.user?.avatarPath) {
+      try {
+        const result = await this.storageService.createSignedDownloadUrl(
+          profile.user.avatarPath,
+          300,
+          AVATARS_BUCKET,
+        );
+        avatarUrl = result.signedUrl;
+      } catch {
+        // storage não configurado
+      }
+    }
+
+    return { ...profile, user: { ...profile.user, avatarUrl } };
   }
 
   /**
