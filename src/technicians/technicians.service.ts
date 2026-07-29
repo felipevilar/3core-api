@@ -71,7 +71,7 @@ export class TechniciansService {
             SELECT 1 FROM tech_service_areas sa
             JOIN cities sc ON sc.code = sa."cityCode"
             WHERE sa."techProfileId" = p.id
-              AND sc.searchName LIKE :cidadeAtendida
+              AND sc."searchName" LIKE :cidadeAtendida
           )`,
           { cidadeAtendida: `%${this.normalize(query.cidadeAtendida)}%` },
         );
