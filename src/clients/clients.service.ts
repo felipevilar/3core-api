@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { QueryFailedError } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { Client } from './entities/client.entity';
@@ -95,7 +96,16 @@ export class ClientsService {
 
   async remove(id: number) {
     const client = await this.findOne(id);
-    await this.clientRepo.remove(client);
+    try {
+      await this.clientRepo.remove(client);
+    } catch (err) {
+      if (err instanceof QueryFailedError && (err as any).code === '23503') {
+        throw new ConflictException(
+          'Este cliente possui chamados vinculados e não pode ser excluído',
+        );
+      }
+      throw err;
+    }
     return { success: true };
   }
 

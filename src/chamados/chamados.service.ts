@@ -450,12 +450,22 @@ export class ChamadosService {
 
   async remove(id: number) {
     const chamado = await this.loadOrFail(id);
-    if (chamado.status !== 'aberto') {
+    if (!['aberto', 'fechado'].includes(chamado.status)) {
       throw new ConflictException(
-        'Só é possível excluir um chamado ainda aberto (sem histórico)',
+        'Só é possível excluir chamados abertos ou fechados',
       );
     }
+    const rats = await this.ratRepo.find({ where: { chamadoId: id } });
     await this.chamadoRepo.remove(chamado);
+    for (const rat of rats) {
+      try {
+        await this.storage.remove(rat.storagePath);
+      } catch (e) {
+        this.logger.warn(
+          `Chamado ${id} excluído, mas objeto ${rat.storagePath} não foi apagado: ${(e as Error).message}`,
+        );
+      }
+    }
     return { success: true };
   }
 
