@@ -67,11 +67,14 @@ export class TechniciansService {
       if (query.status === 'inativo') qb.andWhere('u.isActive = false');
       if (query.cidadeAtendida) {
         qb.andWhere(
-          `EXISTS (
-            SELECT 1 FROM tech_service_areas sa
-            JOIN cities sc ON sc.code = sa."cityCode"
-            WHERE sa."techProfileId" = p.id
-              AND sc."searchName" LIKE :cidadeAtendida
+          `(
+            city."searchName" LIKE :cidadeAtendida
+            OR EXISTS (
+              SELECT 1 FROM tech_service_areas sa
+              JOIN cities sc ON sc.code = sa."cityCode"
+              WHERE sa."techProfileId" = p.id
+                AND sc."searchName" LIKE :cidadeAtendida
+            )
           )`,
           { cidadeAtendida: `%${this.normalize(query.cidadeAtendida)}%` },
         );
