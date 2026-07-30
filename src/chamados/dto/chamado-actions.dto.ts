@@ -1,6 +1,7 @@
 import {
   IsIn,
   IsInt,
+  IsISO8601,
   IsNumber,
   IsOptional,
   IsString,
@@ -9,6 +10,13 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+
+/** Reagendar um chamado pela agenda. */
+export class ReagendarDto {
+  @IsOptional()
+  @IsISO8601()
+  agendadoPara?: string | null;
+}
 
 /** Atribuir/reatribuir um técnico a um chamado. */
 export class AtribuirDto {

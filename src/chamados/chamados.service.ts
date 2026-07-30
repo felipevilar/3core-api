@@ -24,6 +24,7 @@ import { TechServiceArea } from '../technicians/entities/tech-service-area.entit
 import { CreateChamadoDto } from './dto/create-chamado.dto';
 import { UpdateChamadoDto } from './dto/update-chamado.dto';
 import { ListChamadosQueryDto } from './dto/list-chamados.query.dto';
+import { AgendaQueryDto } from './dto/agenda.query.dto';
 import {
   AtribuirDto,
   CreateLineItemDto,
@@ -168,6 +169,98 @@ export class ChamadosService {
   }
 
   // ============================================================ leitura
+
+  /**
+   * Retorna todos os chamados com `agendadoPara` no intervalo [de, ate]
+   * (datas locais em America/Sao_Paulo). Payload enxuto — sem dados financeiros.
+   * Intervalo máximo: 92 dias.
+   */
+  async agenda(query: AgendaQueryDto, user: AuthUser) {
+    const de = new Date(query.de);
+    const ate = new Date(query.ate);
+    const DIAS_MAX = 92;
+    const diffMs = ate.getTime() - de.getTime();
+    if (diffMs < 0 || diffMs > DIAS_MAX * 24 * 60 * 60 * 1000) {
+      throw new BadRequestException(
+        `O intervalo de datas deve ser entre 0 e ${DIAS_MAX} dias`,
+      );
+    }
+
+    const qb = this.chamadoRepo
+      .createQueryBuilder('c')
+      .leftJoinAndSelect('c.client', 'client')
+      .leftJoinAndSelect('c.city', 'city')
+      .where('c.agendadoPara IS NOT NULL')
+      .orderBy('c.agendadoPara', 'ASC')
+      .addOrderBy('c.id', 'ASC');
+
+    this.applyTecnicoScope(qb, user);
+    this.applyDateRange(qb, 'c.agendadoPara', query.de, query.ate);
+
+    if (query.status?.length) {
+      qb.andWhere('c.status IN (:...statuses)', { statuses: query.status });
+    }
+    if (query.prioridade?.length) {
+      qb.andWhere('c.prioridade IN (:...prios)', { prios: query.prioridade });
+    }
+    if (query.clientId) {
+      qb.andWhere('c.clientId = :cid', { cid: query.clientId });
+    }
+    if (query.tecnicoUserIds?.length && this.isGerente(user)) {
+      qb.andWhere('c.tecnicoUserId IN (:...tids)', {
+        tids: query.tecnicoUserIds,
+      });
+    }
+
+    const rows = await qb.getMany();
+    return rows.map((c) => ({
+      id: c.id,
+      codigo: c.codigo,
+      titulo: c.titulo,
+      status: c.status,
+      prioridade: c.prioridade,
+      agendadoPara: c.agendadoPara,
+      clienteNome: c.client?.nome ?? null,
+      tecnicoNome: c.snapTecnicoNome ?? c.tecnicoUser?.name ?? null,
+      tecnicoUserId: c.tecnicoUserId,
+      cidadeNome: c.city?.nome ?? null,
+      uf: c.city?.uf ?? null,
+      logradouro: c.logradouro,
+      numero: c.numero,
+      bairro: c.bairro,
+    }));
+  }
+
+  /** Atualiza apenas `agendadoPara`. Bloqueado se fechado/cancelado. */
+  async reagendar(
+    id: number,
+    agendadoPara: string | null,
+    user: AuthUser,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const chamado = await this.loadOrFail(id, manager);
+
+      if (!this.isGerente(user) && chamado.tecnicoUserId !== user.userId) {
+        throw new NotFoundException('Chamado não encontrado');
+      }
+      if (['fechado', 'cancelado'].includes(chamado.status)) {
+        throw new ConflictException(
+          'Chamado fechado/cancelado não pode ser reagendado',
+        );
+      }
+
+      const anterior = chamado.agendadoPara;
+      chamado.agendadoPara = agendadoPara ? new Date(agendadoPara) : null;
+
+      await manager.getRepository(Chamado).save(chamado);
+      await this.logEvent(manager, id, user, {
+        tipo: 'editado',
+        metadata: { agendadoAntes: anterior, agendadoDepois: chamado.agendadoPara },
+      });
+
+      return { id: chamado.id, agendadoPara: chamado.agendadoPara };
+    });
+  }
 
   async list(query: ListChamadosQueryDto, user: AuthUser) {
     const qb = this.chamadoRepo
