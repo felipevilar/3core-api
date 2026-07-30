@@ -20,9 +20,11 @@ import {
   FinalizarDto,
   MotivoDto,
   RatUploadUrlDto,
+  ReagendarDto,
   UpdateLineItemDto,
   UpdatePagamentoDto,
 } from './dto/chamado-actions.dto';
+import { AgendaQueryDto } from './dto/agenda.query.dto';
 import {
   RequireAnyPermission,
   RequirePermissions,
@@ -39,6 +41,13 @@ export class ChamadosController {
   @RequirePermissions('atendimentos.ver')
   list(@Query() query: ListChamadosQueryDto, @CurrentUser() user: AuthUser) {
     return this.service.list(query, user);
+  }
+
+  // Rota literal deve vir ANTES de @Get(':id') para não ser capturada como id.
+  @Get('agenda')
+  @RequirePermissions('agenda.ver')
+  agenda(@Query() query: AgendaQueryDto, @CurrentUser() user: AuthUser) {
+    return this.service.agenda(query, user);
   }
 
   @Get(':id')
@@ -86,6 +95,16 @@ export class ChamadosController {
   @RequirePermissions('atendimentos.excluir')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);
+  }
+
+  @Patch(':id/reagendar')
+  @RequirePermissions('agenda.gerenciar')
+  reagendar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ReagendarDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.reagendar(id, dto.agendadoPara ?? null, user);
   }
 
   // ---- transições administrativas ----

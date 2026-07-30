@@ -19,6 +19,7 @@ export interface PermissionDef {
 export const FEATURE_LABELS: Record<string, string> = {
   dashboard: 'Painel',
   atendimentos: 'Atendimentos',
+  agenda: 'Agenda',
   clientes: 'Clientes',
   inbox: 'Caixa de Entrada',
   landing: 'Landing Page',
@@ -69,6 +70,18 @@ export const PERMISSIONS: PermissionDef[] = [
     key: 'atendimentos.gerenciar',
     label: 'Gerenciar atendimentos (atribuir, fechar, reabrir, cancelar)',
     feature: 'atendimentos',
+  },
+
+  // Agenda (calendário de atendimentos agendados)
+  {
+    key: 'agenda.ver',
+    label: 'Ver agenda (calendário de atendimentos)',
+    feature: 'agenda',
+  },
+  {
+    key: 'agenda.gerenciar',
+    label: 'Reagendar atendimentos pela agenda',
+    feature: 'agenda',
   },
 
   // Clientes (híbrido)

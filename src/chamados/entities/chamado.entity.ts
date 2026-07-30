@@ -100,6 +100,8 @@ export class Chamado {
   @Column({ type: 'varchar', default: 'aberto' })
   status: ChamadoStatus;
 
+  // Indexado: a agenda (calendário) consulta por intervalo nesta coluna.
+  @Index()
   @Column({ type: 'timestamptz', nullable: true })
   agendadoPara: Date | null;
 
