@@ -22,6 +22,7 @@ import {
   RatUploadUrlDto,
   ReagendarDto,
   UpdateLineItemDto,
+  UpdateImpostoDto,
   UpdatePagamentoDto,
 } from './dto/chamado-actions.dto';
 import { AgendaQueryDto } from './dto/agenda.query.dto';
@@ -153,9 +154,12 @@ export class ChamadosController {
     return this.service.cancelar(id, dto, user);
   }
 
-  // ---- aceite de solicitação (técnico dono) ----
+  // ---- aceite de solicitação (técnico dono ou gestor em nome dele) ----
   @Post(':id/aceitar')
-  @RequirePermissions('atendimentos.ver_solicitacoes')
+  @RequireAnyPermission(
+    'atendimentos.ver_solicitacoes',
+    'atendimentos.gerenciar',
+  )
   aceitar(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: AuthUser,
@@ -164,7 +168,10 @@ export class ChamadosController {
   }
 
   @Post(':id/recusar')
-  @RequirePermissions('atendimentos.ver_solicitacoes')
+  @RequireAnyPermission(
+    'atendimentos.ver_solicitacoes',
+    'atendimentos.gerenciar',
+  )
   recusar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: MotivoDto,
@@ -173,9 +180,12 @@ export class ChamadosController {
     return this.service.recusar(id, dto, user);
   }
 
-  // ---- transições do técnico (dono) ----
+  // ---- transições do técnico (dono ou gestor em nome dele) ----
   @Post(':id/a-caminho')
-  @RequirePermissions('atendimentos.ver_solicitacoes')
+  @RequireAnyPermission(
+    'atendimentos.ver_solicitacoes',
+    'atendimentos.gerenciar',
+  )
   aCaminho(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: AuthUser,
@@ -184,7 +194,10 @@ export class ChamadosController {
   }
 
   @Post(':id/chegada')
-  @RequirePermissions('atendimentos.ver_solicitacoes')
+  @RequireAnyPermission(
+    'atendimentos.ver_solicitacoes',
+    'atendimentos.gerenciar',
+  )
   chegada(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: AuthUser,
@@ -193,7 +206,10 @@ export class ChamadosController {
   }
 
   @Post(':id/finalizar')
-  @RequirePermissions('atendimentos.ver_solicitacoes')
+  @RequireAnyPermission(
+    'atendimentos.ver_solicitacoes',
+    'atendimentos.gerenciar',
+  )
   finalizar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: FinalizarDto,
@@ -277,6 +293,16 @@ export class ChamadosController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.service.removeLineItem(id, itemId, user);
+  }
+
+  @Patch(':id/imposto')
+  @RequirePermissions('financeiro.gerenciar')
+  updateImposto(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateImpostoDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.updateImposto(id, dto, user);
   }
 
   @Patch(':id/pagamento')

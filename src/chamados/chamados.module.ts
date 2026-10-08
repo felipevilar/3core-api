@@ -4,6 +4,7 @@ import { Chamado } from './entities/chamado.entity';
 import { ChamadoLineItem } from './entities/chamado-line-item.entity';
 import { ChamadoEvent } from './entities/chamado-event.entity';
 import { ChamadoRat } from './entities/chamado-rat.entity';
+import { FinanceiroConfig } from './entities/financeiro-config.entity';
 import { Client } from '../clients/entities/client.entity';
 import { User } from '../auth/entities/user.entity';
 import { TechProfile } from '../technicians/entities/tech-profile.entity';
@@ -20,6 +21,7 @@ import { FinanceiroController } from './financeiro.controller';
       ChamadoLineItem,
       ChamadoEvent,
       ChamadoRat,
+      FinanceiroConfig,
       Client,
       User,
       TechProfile,

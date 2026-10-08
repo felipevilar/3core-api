@@ -90,3 +90,22 @@ export function multiplyMoney(
   const cents = Math.round(q * v * 100);
   return (cents / 100).toFixed(2);
 }
+
+/**
+ * Aplica um percentual (ex. "11.50" = 11,5%) a um valor monetário, em centavos
+ * inteiros e com arredondamento half-up no centavo (afastando do zero, igual ao
+ * ROUND do Postgres). Base do imposto sobre a receita bruta.
+ */
+export function percentOfMoney(
+  valor: string | number | null | undefined,
+  percentual: string | number | null | undefined,
+): string {
+  const cents = BigInt(Math.round(brMoneyToNumber(valor) * 100));
+  // Percentual em centésimos de ponto (11.50% -> 1150).
+  const bp = BigInt(Math.round(Number(percentual ?? 0) * 100));
+  const produto = cents * bp;
+  const abs = produto < 0n ? -produto : produto;
+  const arred = (abs + 5000n) / 10000n;
+  const result = produto < 0n ? -arred : arred;
+  return (Number(result) / 100).toFixed(2);
+}

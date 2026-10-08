@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { Chamado } from './entities/chamado.entity';
+import {
+  FINANCEIRO_CONFIG_ID,
+  FinanceiroConfig,
+} from './entities/financeiro-config.entity';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { sumMoney } from '../common/br-money';
 
@@ -22,7 +26,53 @@ export class FinanceiroService {
   constructor(
     @InjectRepository(Chamado)
     private readonly chamadoRepo: Repository<Chamado>,
+    private readonly dataSource: DataSource,
   ) {}
+
+  // ============================================================ configuração
+
+  /** Configuração financeira da empresa (alíquota de imposto vigente). */
+  async getConfig() {
+    const config = await this.dataSource
+      .getRepository(FinanceiroConfig)
+      .findOneBy({ id: FINANCEIRO_CONFIG_ID });
+    return {
+      aliquotaImposto: config?.aliquotaImposto ?? '0.00',
+      updatedAt: config?.updatedAt ?? null,
+    };
+  }
+
+  /**
+   * Troca a alíquota vigente e recalcula o imposto de todos os chamados ainda
+   * NÃO fechados que emitem nota e seguem a alíquota da empresa. Fechados
+   * mantêm a alíquota congelada da época; os com alíquota própria, a sua.
+   * ROUND do Postgres = half-up no centavo, igual a percentOfMoney().
+   */
+  async updateConfig(aliquotaImposto: number, user: AuthUser) {
+    const aliquota = aliquotaImposto.toFixed(2);
+    await this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        `INSERT INTO "financeiro_config" ("id", "aliquotaImposto", "updatedByUserId", "updatedAt")
+         VALUES ($1, $2, $3, now())
+         ON CONFLICT ("id") DO UPDATE
+         SET "aliquotaImposto" = EXCLUDED."aliquotaImposto",
+             "updatedByUserId" = EXCLUDED."updatedByUserId",
+             "updatedAt" = now()`,
+        [FINANCEIRO_CONFIG_ID, aliquota, user.userId],
+      );
+      await manager.query(
+        `UPDATE "chamados"
+         SET "aliquotaImposto" = $1::numeric,
+             "impostoTotal" = ROUND("valorClienteTotal" * $1::numeric / 100, 2),
+             "updatedAt" = now()
+         WHERE "valoresCongeladosEm" IS NULL
+           AND "emiteNota" = true
+           AND "aliquotaImpostoManual" IS NULL`,
+        [aliquota],
+      );
+    });
+    return this.getConfig();
+  }
 
   /**
    * Folha de pagamento agregada por técnico + competência. Considera chamados
@@ -103,16 +153,29 @@ export class FinanceiroService {
       finalizadoEm: c.finalizadoEm,
       paymentPeriodo: c.paymentPeriodo,
       valorClienteTotal: c.valorClienteTotal,
+      emiteNota: c.emiteNota,
+      aliquotaImposto: c.aliquotaImposto,
+      impostoTotal: c.impostoTotal,
       custoTecnicoTotal: c.custoTecnicoTotal,
-      margem: sumMoney([c.valorClienteTotal, `-${c.custoTecnicoTotal}`]),
+      // Lucro = receita bruta − imposto da nota − repasse ao técnico.
+      margem: sumMoney([
+        c.valorClienteTotal,
+        `-${c.impostoTotal}`,
+        `-${c.custoTecnicoTotal}`,
+      ]),
       paymentStatus: c.paymentStatus,
       clientePaymentStatus: c.clientePaymentStatus,
     }));
 
     // KPIs somados das mesmas linhas (centavos — sem erro de float).
     const faturamentoTotal = sumMoney(rows.map((r) => r.valorClienteTotal));
+    const impostoTotal = sumMoney(rows.map((r) => r.impostoTotal));
     const repasseTotal = sumMoney(rows.map((r) => r.custoTecnicoTotal));
-    const lucroBruto = sumMoney([faturamentoTotal, `-${repasseTotal}`]);
+    const lucroBruto = sumMoney([
+      faturamentoTotal,
+      `-${impostoTotal}`,
+      `-${repasseTotal}`,
+    ]);
     const pendenteReceber = sumMoney(
       rows
         .filter((r) => r.clientePaymentStatus === 'pendente')
@@ -136,6 +199,7 @@ export class FinanceiroService {
         pendenteReceber,
         pendentePagar,
         saldoRealizado,
+        impostoTotal,
         // Extras úteis para conciliação (não são cards obrigatórios).
         repasseTotal,
         recebido,

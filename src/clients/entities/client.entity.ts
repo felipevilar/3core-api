@@ -83,6 +83,11 @@ export class Client {
   @Column({ type: 'boolean', default: true })
   ativo: boolean;
 
+  // Padrão de emissão de nota fiscal nos chamados deste cliente (com nota há
+  // imposto sobre a receita). Cada chamado pode ajustar o seu.
+  @Column({ type: 'boolean', default: true })
+  emiteNotaFiscal: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

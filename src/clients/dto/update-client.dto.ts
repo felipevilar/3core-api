@@ -33,4 +33,7 @@ export class UpdateClientDto {
   @IsOptional() @IsString() observacoes?: string;
 
   @IsOptional() @IsBoolean() ativo?: boolean;
+
+  // Padrão de nota fiscal para os chamados do cliente.
+  @IsOptional() @IsBoolean() emiteNotaFiscal?: boolean;
 }

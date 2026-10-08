@@ -168,6 +168,24 @@ export class Chamado {
   @Column({ type: 'timestamptz', nullable: true })
   valoresCongeladosEm: Date | null;
 
+  // ---- Imposto da nota fiscal (abatido da receita bruta) ----
+  // Herdado do cliente na criação; ajustável por chamado.
+  @Column({ type: 'boolean', default: false })
+  emiteNota: boolean;
+
+  // Alíquota específica deste chamado (%). Null = usa a vigente da empresa.
+  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true })
+  aliquotaImpostoManual: string | null;
+
+  // Alíquota efetivamente aplicada (0 sem nota). Materializada junto com os
+  // totais e congelada no fechamento.
+  @Column({ type: 'numeric', precision: 5, scale: 2, default: 0 })
+  aliquotaImposto: string;
+
+  // valorClienteTotal × aliquotaImposto. Lucro = receita − imposto − custo.
+  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0 })
+  impostoTotal: string;
+
   // ---- Pagamento (ciclo separado) ----
   @Index()
   @Column({ type: 'varchar', default: 'nao_aplicavel' })

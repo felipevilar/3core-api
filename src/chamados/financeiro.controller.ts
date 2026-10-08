@@ -1,12 +1,30 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Query } from '@nestjs/common';
 import { FinanceiroService } from './financeiro.service';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
+import { UpdateFinanceiroConfigDto } from './dto/chamado-actions.dto';
 
 @Controller('financeiro')
 export class FinanceiroController {
   constructor(private readonly service: FinanceiroService) {}
+
+  /** Configuração financeira (alíquota de imposto vigente). */
+  @Get('config')
+  @RequirePermissions('financeiro.ver')
+  getConfig() {
+    return this.service.getConfig();
+  }
+
+  /** Troca a alíquota vigente e recalcula os chamados não fechados. */
+  @Patch('config')
+  @RequirePermissions('financeiro.gerenciar')
+  updateConfig(
+    @Body() dto: UpdateFinanceiroConfigDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.updateConfig(dto.aliquotaImposto, user);
+  }
 
   /** Painel consolidado de um período (KPIs + atendimentos). */
   @Get('overview')
