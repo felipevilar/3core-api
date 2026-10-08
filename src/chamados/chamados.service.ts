@@ -18,6 +18,10 @@ import { Chamado, ChamadoStatus } from './entities/chamado.entity';
 import { ChamadoLineItem } from './entities/chamado-line-item.entity';
 import { ChamadoEvent } from './entities/chamado-event.entity';
 import { ChamadoRat } from './entities/chamado-rat.entity';
+import {
+  FINANCEIRO_CONFIG_ID,
+  FinanceiroConfig,
+} from './entities/financeiro-config.entity';
 import { Client } from '../clients/entities/client.entity';
 import { User } from '../auth/entities/user.entity';
 import { TechServiceArea } from '../technicians/entities/tech-service-area.entity';
@@ -31,13 +35,19 @@ import {
   CreateRatDto,
   FinalizarDto,
   MotivoDto,
+  UpdateImpostoDto,
   UpdateLineItemDto,
   UpdatePagamentoDto,
 } from './dto/chamado-actions.dto';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { NOTIFIER } from '../notifications/notifier';
 import type { Notifier } from '../notifications/notifier';
-import { multiplyMoney, parseBrMoney, sumMoney } from '../common/br-money';
+import {
+  multiplyMoney,
+  parseBrMoney,
+  percentOfMoney,
+  sumMoney,
+} from '../common/br-money';
 import { ROLE_SUPER_ADMIN } from '../auth/permissions.catalog';
 import { StorageService } from '../storage/storage.service';
 
@@ -129,7 +139,11 @@ export class ChamadosService {
     await repo.save(event);
   }
 
-  /** Recalcula os totais (custo/receita) a partir das linhas. */
+  /**
+   * Recalcula os totais (custo/receita) a partir das linhas e o imposto da nota
+   * sobre a receita bruta: alíquota própria do chamado ou a vigente da empresa
+   * (zero quando o chamado não emite nota).
+   */
   private async recomputeTotals(manager: EntityManager, chamadoId: number) {
     const items = await manager.getRepository(ChamadoLineItem).find({
       where: { chamadoId },
@@ -140,10 +154,36 @@ export class ChamadosService {
     const receita = sumMoney(
       items.filter((i) => i.natureza === 'receita').map((i) => i.valorTotal),
     );
+    const chamado = await manager.getRepository(Chamado).findOne({
+      where: { id: chamadoId },
+      select: { id: true, emiteNota: true, aliquotaImpostoManual: true },
+    });
+    const aliquota = chamado?.emiteNota
+      ? (chamado.aliquotaImpostoManual ?? (await this.aliquotaVigente(manager)))
+      : '0.00';
     await manager.getRepository(Chamado).update(chamadoId, {
       custoTecnicoTotal: custo,
       valorClienteTotal: receita,
+      aliquotaImposto: aliquota,
+      impostoTotal: percentOfMoney(receita, aliquota),
     });
+  }
+
+  /** Alíquota de imposto vigente da empresa (%), da linha única de config. */
+  private async aliquotaVigente(manager: EntityManager): Promise<string> {
+    const config = await manager
+      .getRepository(FinanceiroConfig)
+      .findOneBy({ id: FINANCEIRO_CONFIG_ID });
+    return config?.aliquotaImposto ?? '0.00';
+  }
+
+  /** Lucro do chamado: receita bruta − imposto da nota − custo do técnico. */
+  private margemDe(c: Chamado): string {
+    return sumMoney([
+      c.valorClienteTotal,
+      `-${c.impostoTotal}`,
+      `-${c.custoTecnicoTotal}`,
+    ]);
   }
 
   /**
@@ -232,11 +272,7 @@ export class ChamadosService {
   }
 
   /** Atualiza apenas `agendadoPara`. Bloqueado se fechado/cancelado. */
-  async reagendar(
-    id: number,
-    agendadoPara: string | null,
-    user: AuthUser,
-  ) {
+  async reagendar(id: number, agendadoPara: string | null, user: AuthUser) {
     return this.dataSource.transaction(async (manager) => {
       const chamado = await this.loadOrFail(id, manager);
 
@@ -255,7 +291,10 @@ export class ChamadosService {
       await manager.getRepository(Chamado).save(chamado);
       await this.logEvent(manager, id, user, {
         tipo: 'editado',
-        metadata: { agendadoAntes: anterior, agendadoDepois: chamado.agendadoPara },
+        metadata: {
+          agendadoAntes: anterior,
+          agendadoDepois: chamado.agendadoPara,
+        },
       });
 
       return { id: chamado.id, agendadoPara: chamado.agendadoPara };
@@ -442,14 +481,18 @@ export class ChamadosService {
         prioridade: dto.prioridade ?? 'media',
         status: 'aberto',
         agendadoPara: dto.agendadoPara ? new Date(dto.agendadoPara) : null,
+        // Nota fiscal: padrão do cliente (ajustável no financeiro do chamado).
+        emiteNota: client.emiteNotaFiscal,
         createdByUserId: user.userId,
       });
       const saved = await manager.getRepository(Chamado).save(chamado);
+      // Materializa a alíquota vigente já na criação.
+      await this.recomputeTotals(manager, saved.id);
       await this.logEvent(manager, saved.id, user, {
         tipo: 'criado',
         statusNovo: 'aberto',
       });
-      return this.serialize(saved, user, { includeLineItems: true });
+      return this.findOneTx(manager, saved.id, user);
     });
   }
 
@@ -869,6 +912,8 @@ export class ChamadosService {
         metadata: {
           custoTecnicoTotal: refreshed.custoTecnicoTotal,
           valorClienteTotal: refreshed.valorClienteTotal,
+          aliquotaImposto: refreshed.aliquotaImposto,
+          impostoTotal: refreshed.impostoTotal,
           paymentPeriodo: refreshed.paymentPeriodo,
         },
       });
@@ -935,6 +980,8 @@ export class ChamadosService {
       chamado.reabertoEm = new Date();
       chamado.motivoReabertura = dto.motivo;
       await manager.getRepository(Chamado).save(chamado);
+      // Descongelado: o imposto volta a seguir a alíquota vigente.
+      await this.recomputeTotals(manager, id);
 
       await this.logEvent(manager, id, user, {
         tipo: 'reaberto',
@@ -1115,6 +1162,47 @@ export class ChamadosService {
         tipo: 'line_item_alterado',
         nota: 'linha removida',
         metadata: { acao: 'remove', itemId },
+      });
+      return this.findOneTx(manager, id, user);
+    });
+  }
+
+  /** Ajusta a nota fiscal / alíquota do chamado e recalcula o imposto. */
+  async updateImposto(id: number, dto: UpdateImpostoDto, user: AuthUser) {
+    return this.dataSource.transaction(async (manager) => {
+      const chamado = await this.loadOrFail(id, manager);
+      this.assertNaoCongelado(chamado);
+      const antes = {
+        emiteNota: chamado.emiteNota,
+        aliquotaImpostoManual: chamado.aliquotaImpostoManual,
+        aliquotaImposto: chamado.aliquotaImposto,
+        impostoTotal: chamado.impostoTotal,
+      };
+
+      if (dto.emiteNota !== undefined) chamado.emiteNota = dto.emiteNota;
+      // null volta para a alíquota vigente; ausente mantém.
+      if (dto.aliquotaImpostoManual !== undefined) {
+        chamado.aliquotaImpostoManual =
+          dto.aliquotaImpostoManual === null
+            ? null
+            : dto.aliquotaImpostoManual.toFixed(2);
+      }
+      await manager.getRepository(Chamado).save(chamado);
+      await this.recomputeTotals(manager, id);
+
+      const depois = await this.loadOrFail(id, manager);
+      await this.logEvent(manager, id, user, {
+        tipo: 'financeiro_alterado',
+        nota: 'imposto alterado',
+        metadata: {
+          antes,
+          depois: {
+            emiteNota: depois.emiteNota,
+            aliquotaImpostoManual: depois.aliquotaImpostoManual,
+            aliquotaImposto: depois.aliquotaImposto,
+            impostoTotal: depois.impostoTotal,
+          },
+        },
       });
       return this.findOneTx(manager, id, user);
     });
@@ -1302,8 +1390,13 @@ export class ChamadosService {
 
   // ============================================================ util transição dono
 
+  /**
+   * Ações do técnico (aceitar, recusar, a caminho, chegada, finalizar): o
+   * próprio técnico dono ou um gerente agindo em nome dele. O evento registra
+   * o ator real (atorEmail/atorRole), então a ação em nome fica auditável.
+   */
   private assertDono(chamado: Chamado, user: AuthUser) {
-    if (chamado.tecnicoUserId !== user.userId) {
+    if (chamado.tecnicoUserId !== user.userId && !this.isGerente(user)) {
       throw new ForbiddenException('Ação restrita ao técnico do chamado');
     }
   }
@@ -1419,10 +1512,11 @@ export class ChamadosService {
     // Receita/margem e recebimento do cliente só para quem tem financeiro.ver.
     if (podeFin) {
       base.valorClienteTotal = chamado.valorClienteTotal;
-      base.margem = sumMoney([
-        chamado.valorClienteTotal,
-        `-${chamado.custoTecnicoTotal}`,
-      ]);
+      base.emiteNota = chamado.emiteNota;
+      base.aliquotaImposto = chamado.aliquotaImposto;
+      base.aliquotaImpostoManual = chamado.aliquotaImpostoManual;
+      base.impostoTotal = chamado.impostoTotal;
+      base.margem = this.margemDe(chamado);
       base.clientePaymentStatus = chamado.clientePaymentStatus;
       base.clientePagoEm = chamado.clientePagoEm;
       base.financeiroObs = chamado.financeiroObs;

@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsISO8601,
@@ -75,6 +76,24 @@ export class UpdatePagamentoDto {
     | 'pago';
   @IsOptional() @IsString() @Length(7, 7) paymentPeriodo?: string;
   @IsOptional() @IsString() financeiroObs?: string;
+}
+
+/**
+ * Imposto da nota fiscal de um chamado. `aliquotaImpostoManual: null` volta a
+ * usar a alíquota vigente da empresa; ausente mantém a atual.
+ */
+export class UpdateImpostoDto {
+  @IsOptional() @IsBoolean() emiteNota?: boolean;
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  aliquotaImpostoManual?: number | null;
+}
+
+/** Alíquota de imposto vigente da empresa (%). */
+export class UpdateFinanceiroConfigDto {
+  @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(100) aliquotaImposto: number;
 }
 
 /** Pedido de URL assinada de upload da RAT (só o nome do arquivo). */
