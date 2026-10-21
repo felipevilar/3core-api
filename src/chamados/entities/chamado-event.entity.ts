@@ -35,6 +35,7 @@ export type ChamadoEventTipo =
   | 'rat_anexado'
   | 'rat_removido'
   | 'line_item_alterado'
+  | 'execucao_ajustada'
   | 'financeiro_alterado'
   | 'pagamento_alterado';
 

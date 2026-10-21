@@ -99,6 +99,13 @@ export class FinalizarDto {
   avaliacao?: AvaliacaoDto;
 }
 
+/** Ajuste pelo gestor de horas/km de uma visita já finalizada. */
+export class AjustarExecucaoDto {
+  @IsOptional() @IsNumber() @Min(0) @Max(1000) horasTrabalhadas?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100000) kmDeslocamento?: number;
+  @IsOptional() @IsString() observacao?: string;
+}
+
 export class MotivoDto {
   @IsString() @MinLength(3) motivo: string;
   // Motivo classificado do catálogo (opcional).

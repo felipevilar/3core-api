@@ -14,6 +14,7 @@ import { CreateChamadoDto } from './dto/create-chamado.dto';
 import { UpdateChamadoDto } from './dto/update-chamado.dto';
 import { ListChamadosQueryDto } from './dto/list-chamados.query.dto';
 import {
+  AjustarExecucaoDto,
   AtribuirDto,
   ComentarioDto,
   CreateLineItemDto,
@@ -121,6 +122,18 @@ export class ChamadosController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.service.cancelarVisita(id, visitaId, dto, user);
+  }
+
+  /** Gestor corrige horas/km de uma visita finalizada (regenera linhas auto). */
+  @Patch(':id/visitas/:visitaId/execucao')
+  @RequirePermissions('financeiro.gerenciar')
+  ajustarExecucao(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('visitaId', ParseIntPipe) visitaId: number,
+    @Body() dto: AjustarExecucaoDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.ajustarExecucao(id, visitaId, dto, user);
   }
 
   @Patch(':id/visitas/:visitaId/ordem')

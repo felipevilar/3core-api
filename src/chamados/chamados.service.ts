@@ -44,6 +44,7 @@ import {
   CreateLineItemDto,
   CreateRatDto,
   CreateVisitaDto,
+  AjustarExecucaoDto,
   FinalizarDto,
   GeoDto,
   MinhaRotaQueryDto,
@@ -1813,55 +1814,7 @@ export class ChamadosService {
       if (slaConclusaoViolado) chamado.slaConclusaoViolado = true;
       await this.salvarVisitaEChamado(manager, chamado, visita);
 
-      // Regenera linhas auto de execução DESTA visita (mão de obra + deslocamento).
-      await manager.getRepository(ChamadoLineItem).delete({
-        chamadoId: id,
-        origem: 'auto_snapshot',
-        visitaId: visita.id,
-        tipo: 'servico',
-        descricao: `Visita ${visita.numero} — Mão de obra`,
-      });
-      await manager
-        .getRepository(ChamadoLineItem)
-        .createQueryBuilder()
-        .delete()
-        .where(
-          `"chamadoId" = :id AND "origem" = 'auto_snapshot' AND "visitaId" = :vid
-           AND ("tipo" = 'deslocamento' OR "descricao" LIKE :mo)`,
-          { id, vid: visita.id, mo: `Visita ${visita.numero} — Mão de obra%` },
-        )
-        .execute();
-
-      const valorHora = visita.snapValorHora;
-      if (valorHora && Number(valorHora) > 0 && dto.horasTrabalhadas > 0) {
-        await manager.getRepository(ChamadoLineItem).insert({
-          chamadoId: id,
-          visitaId: visita.id,
-          natureza: 'custo',
-          tipo: 'servico',
-          descricao: `Visita ${visita.numero} — Mão de obra (${horas}h)`,
-          quantidade: horas,
-          valorUnitario: valorHora,
-          valorTotal: multiplyMoney(horas, valorHora),
-          origem: 'auto_snapshot',
-          createdByUserId: user.userId,
-        });
-      }
-      const custoKm = visita.snapCustoKmCidade ?? visita.snapCustoPorKm;
-      if (custoKm && Number(custoKm) > 0 && dto.kmDeslocamento > 0) {
-        await manager.getRepository(ChamadoLineItem).insert({
-          chamadoId: id,
-          visitaId: visita.id,
-          natureza: 'custo',
-          tipo: 'deslocamento',
-          descricao: `Visita ${visita.numero} — Deslocamento (${km} km)`,
-          quantidade: km,
-          valorUnitario: custoKm,
-          valorTotal: multiplyMoney(km, custoKm),
-          origem: 'auto_snapshot',
-          createdByUserId: user.userId,
-        });
-      }
+      await this.regerarLinhasExecucao(manager, visita, user.userId);
       await this.recomputeTotals(manager, id);
       await this.recomputeExecucao(manager, id);
 
@@ -2357,6 +2310,125 @@ export class ChamadosService {
   }
 
   // ============================================================ financeiro
+
+  /**
+   * (Re)gera as linhas automáticas de execução DESTA visita (mão de obra e
+   * deslocamento) a partir de `horasTrabalhadas`/`kmDeslocamento` e dos
+   * snapshots de tarifa. Usado na finalização e no ajuste pelo gestor.
+   */
+  private async regerarLinhasExecucao(
+    manager: EntityManager,
+    visita: ChamadoVisita,
+    userId: number | null,
+  ) {
+    const repo = manager.getRepository(ChamadoLineItem);
+    await repo
+      .createQueryBuilder()
+      .delete()
+      .where(
+        `"chamadoId" = :id AND "origem" = 'auto_snapshot' AND "visitaId" = :vid
+         AND ("tipo" = 'deslocamento' OR "descricao" LIKE :mo)`,
+        {
+          id: visita.chamadoId,
+          vid: visita.id,
+          mo: `Visita ${visita.numero} — Mão de obra%`,
+        },
+      )
+      .execute();
+
+    const horas = visita.horasTrabalhadas ?? '0.00';
+    const km = visita.kmDeslocamento ?? '0.00';
+    const valorHora = visita.snapValorHora;
+    if (valorHora && Number(valorHora) > 0 && Number(horas) > 0) {
+      await repo.insert({
+        chamadoId: visita.chamadoId,
+        visitaId: visita.id,
+        natureza: 'custo',
+        tipo: 'servico',
+        descricao: `Visita ${visita.numero} — Mão de obra (${horas}h)`,
+        quantidade: horas,
+        valorUnitario: valorHora,
+        valorTotal: multiplyMoney(horas, valorHora),
+        origem: 'auto_snapshot',
+        createdByUserId: userId,
+      });
+    }
+    const custoKm = visita.snapCustoKmCidade ?? visita.snapCustoPorKm;
+    if (custoKm && Number(custoKm) > 0 && Number(km) > 0) {
+      await repo.insert({
+        chamadoId: visita.chamadoId,
+        visitaId: visita.id,
+        natureza: 'custo',
+        tipo: 'deslocamento',
+        descricao: `Visita ${visita.numero} — Deslocamento (${km} km)`,
+        quantidade: km,
+        valorUnitario: custoKm,
+        valorTotal: multiplyMoney(km, custoKm),
+        origem: 'auto_snapshot',
+        createdByUserId: userId,
+      });
+    }
+  }
+
+  /**
+   * Gestor corrige horas/km de uma visita já finalizada (ex.: técnico digitou
+   * km errado). Regenera as linhas automáticas da visita, recalcula totais e
+   * a soma de execução do chamado. Zerar o km remove a linha de deslocamento.
+   */
+  async ajustarExecucao(
+    id: number,
+    visitaId: number,
+    dto: AjustarExecucaoDto,
+    user: AuthUser,
+  ) {
+    if (
+      dto.horasTrabalhadas === undefined &&
+      dto.kmDeslocamento === undefined
+    ) {
+      throw new BadRequestException('Informe horas e/ou km para ajustar');
+    }
+    return this.dataSource.transaction(async (manager) => {
+      const chamado = await this.loadOrFail(id, manager);
+      this.assertNaoCongelado(chamado);
+      const visita = await manager
+        .getRepository(ChamadoVisita)
+        .findOne({ where: { id: visitaId, chamadoId: id } });
+      if (!visita) throw new NotFoundException('Visita não encontrada');
+      if (visita.status !== 'finalizado') {
+        throw new ConflictException(
+          'Só é possível ajustar horas/km de uma visita finalizada',
+        );
+      }
+      const antes = {
+        horasTrabalhadas: visita.horasTrabalhadas,
+        kmDeslocamento: visita.kmDeslocamento,
+      };
+      if (dto.horasTrabalhadas !== undefined) {
+        visita.horasTrabalhadas = dto.horasTrabalhadas.toFixed(2);
+      }
+      if (dto.kmDeslocamento !== undefined) {
+        visita.kmDeslocamento = dto.kmDeslocamento.toFixed(2);
+      }
+      await manager.getRepository(ChamadoVisita).save(visita);
+      await this.regerarLinhasExecucao(manager, visita, user.userId);
+      await this.recomputeTotals(manager, id);
+      await this.recomputeExecucao(manager, id);
+      await this.logEvent(manager, id, user, {
+        tipo: 'execucao_ajustada',
+        nota: dto.observacao ?? null,
+        metadata: {
+          visitaId: visita.id,
+          visitaNumero: visita.numero,
+          antes,
+          depois: {
+            horasTrabalhadas: visita.horasTrabalhadas,
+            kmDeslocamento: visita.kmDeslocamento,
+          },
+        },
+      });
+      return this.findOneTx(manager, id, user);
+    });
+  }
 
   async addLineItem(id: number, dto: CreateLineItemDto, user: AuthUser) {
     return this.dataSource.transaction(async (manager) => {
