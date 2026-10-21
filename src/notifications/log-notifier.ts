@@ -44,4 +44,59 @@ export class LogNotifier implements Notifier {
     );
     return Promise.resolve();
   }
+
+  notifyClienteACaminho(
+    chamado: ChamadoNotificationInfo,
+    cliente: ChamadoNotificationTarget,
+    tecnicoNome: string | null,
+  ): Promise<void> {
+    this.logger.log(
+      `[email] -> ${cliente.email} | Técnico ${tecnicoNome ?? ''} a caminho para o chamado ${chamado.codigo}`,
+    );
+    return Promise.resolve();
+  }
+
+  notifyClienteConcluido(
+    chamado: ChamadoNotificationInfo,
+    cliente: ChamadoNotificationTarget,
+  ): Promise<void> {
+    this.logger.log(
+      `[email] -> ${cliente.email} | Chamado ${chamado.codigo} concluído`,
+    );
+    return Promise.resolve();
+  }
+
+  notifySlaEstourado(
+    chamado: ChamadoNotificationInfo,
+    admins: ChamadoNotificationTarget[],
+    detalhe: string,
+  ): Promise<void> {
+    this.logger.log(
+      `[email] -> ${admins.map((a) => a.email).join(', ')} | SLA estourado no chamado ${chamado.codigo}: ${detalhe}`,
+    );
+    return Promise.resolve();
+  }
+
+  notifySolicitacaoExpirada(
+    chamado: ChamadoNotificationInfo,
+    admins: ChamadoNotificationTarget[],
+    tecnicoNome: string | null,
+  ): Promise<void> {
+    this.logger.log(
+      `[email] -> ${admins.map((a) => a.email).join(', ')} | Solicitação do chamado ${chamado.codigo} expirou (${tecnicoNome ?? 'técnico'})`,
+    );
+    return Promise.resolve();
+  }
+
+  notifyComentario(
+    chamado: ChamadoNotificationInfo,
+    targets: ChamadoNotificationTarget[],
+    autorNome: string,
+    texto: string,
+  ): Promise<void> {
+    this.logger.log(
+      `[email] -> ${targets.map((t) => t.email).join(', ')} | ${autorNome} comentou no chamado ${chamado.codigo}: ${texto.slice(0, 80)}`,
+    );
+    return Promise.resolve();
+  }
 }

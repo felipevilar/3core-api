@@ -16,6 +16,9 @@ import { User } from '../../auth/entities/user.entity';
 import { ChamadoLineItem } from './chamado-line-item.entity';
 import { ChamadoEvent } from './chamado-event.entity';
 import { ChamadoRat } from './chamado-rat.entity';
+import { ChamadoVisita } from './chamado-visita.entity';
+import { ClientLocal } from '../../clients/entities/client-local.entity';
+import { Servico } from '../../servicos/entities/servico.entity';
 
 export type ChamadoStatus =
   | 'aberto'
@@ -23,6 +26,7 @@ export type ChamadoStatus =
   | 'atribuido'
   | 'a_caminho'
   | 'em_atendimento'
+  | 'pausado'
   | 'finalizado'
   | 'fechado'
   | 'cancelado';
@@ -80,6 +84,31 @@ export class Chamado {
   @Column({ type: 'varchar', nullable: true })
   pontoReferencia: string | null;
 
+  // Local (site) do cliente de onde o endereço foi copiado — opcional.
+  @ManyToOne(() => ClientLocal, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'localId' })
+  local: ClientLocal | null;
+
+  @Column({ type: 'int', nullable: true })
+  localId: number | null;
+
+  @Column({ type: 'double precision', nullable: true })
+  latitude: number | null;
+  @Column({ type: 'double precision', nullable: true })
+  longitude: number | null;
+
+  // Contato no local do atendimento.
+  @Column({ type: 'varchar', nullable: true })
+  contatoLocalNome: string | null;
+  @Column({ type: 'varchar', nullable: true })
+  contatoLocalTelefone: string | null;
+
+  // Códigos exigidos no check-in / check-out (herdados do local).
+  @Column({ type: 'varchar', nullable: true })
+  codigoCheckin: string | null;
+  @Column({ type: 'varchar', nullable: true })
+  codigoCheckout: string | null;
+
   // ---- Conteúdo ----
   @Column({ type: 'varchar' })
   titulo: string;
@@ -96,16 +125,55 @@ export class Chamado {
   @Column({ type: 'varchar', default: 'media' })
   prioridade: ChamadoPrioridade;
 
+  // Serviço do catálogo (opcional) — padroniza título e duração prevista.
+  @ManyToOne(() => Servico, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'servicoId' })
+  servico: Servico | null;
+
+  @Column({ type: 'int', nullable: true })
+  servicoId: number | null;
+
+  // ---- SLA (prazos a partir da abertura; política resolvida na criação) ----
+  @Column({ type: 'int', nullable: true })
+  slaPoliticaId: number | null;
+  @Column({ type: 'timestamptz', nullable: true })
+  prazoPrimeiraVisita: Date | null;
+  @Index()
+  @Column({ type: 'timestamptz', nullable: true })
+  prazoConclusao: Date | null;
+  // 1º check-in de qualquer visita (marco da 1ª visita).
+  @Column({ type: 'timestamptz', nullable: true })
+  primeiraVisitaEm: Date | null;
+  @Column({ type: 'boolean', default: false })
+  slaPrimeiraVisitaViolado: boolean;
+  @Column({ type: 'boolean', default: false })
+  slaConclusaoViolado: boolean;
+  @Column({ type: 'timestamptz', nullable: true })
+  slaAlertaEnviadoEm: Date | null;
+
+  // Arquivado (só fechado/cancelado): sai da lista padrão.
+  @Index()
+  @Column({ type: 'timestamptz', nullable: true })
+  arquivadoEm: Date | null;
+
   @Index()
   @Column({ type: 'varchar', default: 'aberto' })
   status: ChamadoStatus;
 
   // Indexado: a agenda (calendário) consulta por intervalo nesta coluna.
+  // Espelha a visita atual quando existe; antes da 1ª visita é o agendamento
+  // pretendido pelo gestor.
   @Index()
   @Column({ type: 'timestamptz', nullable: true })
   agendadoPara: Date | null;
 
-  // ---- Técnico executor ----
+  // ---- Visita atual (a execução projetada neste chamado) ----
+  // O status/técnico/carimbos abaixo ESPELHAM a visita atual. `fechado` e
+  // `cancelado` são estados próprios do chamado; `aberto` = sem visita ativa.
+  @Column({ type: 'int', nullable: true })
+  visitaAtualId: number | null;
+
+  // ---- Técnico executor (espelho da visita atual) ----
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'tecnicoUserId' })
   tecnicoUser: User | null;
@@ -142,6 +210,8 @@ export class Chamado {
 
   @Column({ type: 'text', nullable: true })
   motivoCancelamento: string | null;
+  @Column({ type: 'int', nullable: true })
+  motivoCancelamentoId: number | null;
   @Column({ type: 'text', nullable: true })
   motivoReabertura: string | null;
 
@@ -234,4 +304,7 @@ export class Chamado {
 
   @OneToMany(() => ChamadoRat, (r) => r.chamado)
   rats: ChamadoRat[];
+
+  @OneToMany(() => ChamadoVisita, (v) => v.chamado)
+  visitas: ChamadoVisita[];
 }

@@ -8,6 +8,7 @@ const STATUSES = [
   'atribuido',
   'a_caminho',
   'em_atendimento',
+  'pausado',
   'finalizado',
   'fechado',
   'cancelado',

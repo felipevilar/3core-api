@@ -11,6 +11,10 @@ import { CitiesModule } from './cities/cities.module';
 import { ChamadosModule } from './chamados/chamados.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { StorageModule } from './storage/storage.module';
+import { ConfiguracoesModule } from './configuracoes/configuracoes.module';
+import { ServicosModule } from './servicos/servicos.module';
+import { NotificacoesModule } from './notificacoes/notificacoes.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -26,14 +30,20 @@ import { StorageModule } from './storage/storage.module';
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         migrations: [__dirname + '/migrations/*{.ts,.js}'],
         synchronize: false,
-        ssl: {
-          rejectUnauthorized: false,
-        },
+        // DATABASE_SSL=false para Postgres local sem TLS (dev/testes).
+        ssl:
+          configService.get<string>('DATABASE_SSL') === 'false'
+            ? false
+            : { rejectUnauthorized: false },
       }),
     }),
+    ScheduleModule.forRoot(),
     AuthModule,
+    NotificacoesModule,
     NotificationsModule,
     StorageModule,
+    ConfiguracoesModule,
+    ServicosModule,
     CitiesModule,
     TechniciansModule,
     ClientsModule,

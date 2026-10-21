@@ -3,6 +3,8 @@ import {
   IsIn,
   IsInt,
   IsISO8601,
+  IsLatitude,
+  IsLongitude,
   IsNumber,
   IsOptional,
   IsString,
@@ -10,7 +12,59 @@ import {
   Max,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+/** Posição do dispositivo do técnico no momento da ação. */
+export class GeoDto {
+  @IsLatitude() lat: number;
+  @IsLongitude() lng: number;
+  @IsOptional() @IsNumber() @Min(0) precisaoM?: number;
+}
+
+/** Ações de deslocamento/check-in: geolocalização opcional (obrigatória via config). */
+export class TransicaoCampoDto {
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) geo?: GeoDto;
+  // Código de check-in exigido pelo cliente (quando o chamado tem um).
+  @IsOptional() @IsString() codigo?: string;
+}
+
+/** Assinatura do cliente capturada no dispositivo (imagem já no Storage). */
+export class AssinaturaDto {
+  @IsString() storagePath: string;
+  @IsString() @MinLength(2) assinadoPor: string;
+  @IsOptional() @IsString() assinadoDoc?: string;
+}
+
+/** Avaliação do atendimento pelo cliente. */
+export class AvaliacaoDto {
+  @IsInt() @Min(1) @Max(5) nota: number;
+  @IsOptional() @IsString() comentario?: string;
+}
+
+/** Nova visita (retorno) de um chamado: técnico + agendamento. */
+export class CreateVisitaDto {
+  @IsInt() tecnicoUserId: number;
+  @IsOptional() @IsISO8601() agendadoPara?: string;
+  @IsOptional() @IsInt() @Min(5) @Max(1440) duracaoPrevistaMin?: number;
+  @IsOptional() @IsString() chamadaFixa?: string;
+  @IsOptional() @IsString() observacao?: string;
+}
+
+export class OrdemRotaDto {
+  @IsOptional() @IsInt() @Min(0) ordemRota?: number | null;
+}
+
+export class PausarDto {
+  @IsOptional() @IsString() motivo?: string;
+  @IsOptional() @IsInt() motivoId?: number;
+}
+
+export class MinhaRotaQueryDto {
+  @IsISO8601() data: string;
+  @IsOptional() @Type(() => Number) @IsInt() tecnicoUserId?: number;
+}
 
 /** Reagendar um chamado pela agenda. */
 export class ReagendarDto {
@@ -19,11 +73,13 @@ export class ReagendarDto {
   agendadoPara?: string | null;
 }
 
-/** Atribuir/reatribuir um técnico a um chamado. */
+/** Atribuir/reatribuir um técnico a um chamado (cria/reatribui a visita atual). */
 export class AtribuirDto {
   @IsInt() tecnicoUserId: number;
   // Valor de "chamada fixa" (custo) opcional, criado como line item.
   @IsOptional() @IsString() chamadaFixa?: string;
+  @IsOptional() @IsISO8601() agendadoPara?: string;
+  @IsOptional() @IsInt() @Min(5) @Max(1440) duracaoPrevistaMin?: number;
 }
 
 /** Finalização pelo técnico: horas e km informados (com limites de sanidade). */
@@ -31,10 +87,26 @@ export class FinalizarDto {
   @IsNumber() @Min(0) @Max(1000) horasTrabalhadas: number;
   @IsNumber() @Min(0) @Max(100000) kmDeslocamento: number;
   @IsOptional() @IsString() observacao?: string;
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) geo?: GeoDto;
+  @IsOptional() @IsString() codigo?: string;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AssinaturaDto)
+  assinatura?: AssinaturaDto;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AvaliacaoDto)
+  avaliacao?: AvaliacaoDto;
 }
 
 export class MotivoDto {
   @IsString() @MinLength(3) motivo: string;
+  // Motivo classificado do catálogo (opcional).
+  @IsOptional() @IsInt() motivoId?: number;
+}
+
+export class ComentarioDto {
+  @IsString() @MinLength(1) texto: string;
 }
 
 const NATUREZAS = ['custo', 'receita'];

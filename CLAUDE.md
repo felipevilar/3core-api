@@ -29,7 +29,7 @@ npm run migration:revert # revert last migration
 
 ## Environment
 
-Copy `.env.example` to `.env`. Required variables:
+Copy `.env.example` to `.env`. Required variables (`DATABASE_SSL=false` for a local Postgres without TLS):
 
 ```
 DATABASE_URL=postgresql://user:password@host:5432/postgres
@@ -47,7 +47,7 @@ SUPABASE_SERVICE_ROLE_KEY=...
 
 NestJS 11 + TypeORM + PostgreSQL (Supabase). Each feature folder has `module`, `service`, `controller`, `entities/`, and `dto/`. Schema is managed exclusively via migrations in `src/migrations/` — never edit entities to auto-sync.
 
-**Modules**: `AuthModule`, `TechniciansModule`, `ClientsModule`, `ChamadosModule`, `CitiesModule`, `StorageModule`, `NotificationsModule`, `LandingConfigModule`.
+**Modules**: `AuthModule`, `TechniciansModule`, `ClientsModule` (+ locais/contratante), `ChamadosModule` (+ visitas, comentários, scheduler), `CitiesModule`, `StorageModule`, `NotificationsModule` (e-mail + in-app via `CompositeNotifier`), `NotificacoesModule` (sino), `ConfiguracoesModule` (`app_config`, SLA, motivos), `ServicosModule` (catálogo), `LandingConfigModule`. `ScheduleModule` roda os crons de expiração de solicitação (5 min) e SLA (10 min).
 
 ### Authentication & Authorization
 
@@ -71,16 +71,35 @@ JWT payload carries `{ sub, email, role, permissions[] }` — permissions are a 
 
 ### Chamado (Ticket) Lifecycle
 
-Status state machine:
+**Chamado 1:N Visita** (`chamado_visitas`, like Field Control's Order → Task). The
+execution state machine lives in the *visita*; the chamado mirrors its current visit
+(`visitaAtualId`: status, técnico, snapshots, timestamps) so lists/filters/agenda/
+financeiro keep reading `chamados`. `fechado`/`cancelado` are chamado-only states;
+`aberto` = no active visit. `projetarVisita()` + `salvarVisitaEChamado()` do the
+mirroring — never set those mirrored fields by hand.
+
 ```
-aberto → solicitado → atribuido → a_caminho → em_atendimento → finalizado → fechado
-         (any active state) → cancelado
-         fechado → reaberto
+aberto → solicitado → atribuido → a_caminho → em_atendimento ⇄ pausado → finalizado → fechado
+         (any active state) → cancelado      fechado/finalizado → reabrir → em_atendimento
+         visita finalizada/cancelada + chamado não fechado → nova visita (retorno) → solicitado
 ```
+
+- `atribuir` on `aberto` creates visit 1; on an active visit it reassigns the same visit.
+- `recusar`/`desatribuir`/expiração/`cancelarVisita` end the visit without execution
+  (visit `cancelado`, chamado back to `aberto`, auto line items of that visit dropped).
+- Field actions (`a-caminho`, `chegada`, `finalizar`) accept `geo` and `codigo`
+  (check-in/out codes inherited from the client local; técnico only sees `exigeCodigo*`).
+  `finalizar` also takes `assinatura` (signed-URL upload) and `avaliacao`.
+- `app_config` flags (`ratObrigatoria`, `assinaturaObrigatoria`, `geolocalizacaoObrigatoria`,
+  `solicitacaoExpiraHoras`, …) are read through `ConfiguracoesService.get()`.
+- SLA: `sla_politicas` resolved on create (cliente+prioridade > cliente > prioridade > geral);
+  `prazoPrimeiraVisita`/`prazoConclusao` on the chamado, violation flags set at chegada/finalizar,
+  cron alerts once (`slaAlertaEnviadoEm`).
+- `SYSTEM_USER` is the actor for cron-driven events (atorUserId null, role `system`).
 
 Key behaviors:
 - **Frozen snapshots**: on `atribuir()`, technician rates (`snapValorHora`, `snapCustoPorKm`, `snapCustoKmCidade`) are copied to the chamado — historical financial data never changes if rates are edited later.
-- **Auto line items**: `origem: 'auto_snapshot'` lines are regenerated on assignment and finalization (hours × rate, km × rate). On reassignment, old auto lines are cleared first.
+- **Auto line items**: `origem: 'auto_snapshot'` lines are generated **per visit** (`visitaId`): chamada fixa at assignment, hours × rate and km × rate at finalization (`Visita N — …`). Reassigning/cancelling a visit clears only that visit's auto lines; `chamados.horasTrabalhadas/kmDeslocamento` = sum of finalized visits.
 - **Pessimistic locking**: `loadOrFail()` acquires `pessimistic_write` lock to serialize concurrent state transitions.
 - **`@VersionColumn()`**: optimistic lock on the Chamado entity.
 - **Frozen financials**: monetary totals (`custoTecnicoTotal`, `valorClienteTotal`) are only frozen on `fechado` — not on `finalizado`.
@@ -108,7 +127,7 @@ Always use these utilities for any arithmetic on money fields.
 
 ### Notifications
 
-`Notifier` interface (`src/notifications/`) with a `LogNotifier` default implementation. Called fire-and-forget via `notifyAfter()` in ChamadosService — never blocks a response. Swap provider by replacing the module binding.
+`Notifier` interface (`src/notifications/`). Binding is a `CompositeNotifier` = e-mail (`ResendNotifier` when `RESEND_API_KEY` is set, else `LogNotifier`) + `InAppNotifier` (writes `notificacoes` rows for targets that carry `userId`; exposed via `GET /notificacoes`). Called fire-and-forget via `notifyAfter()` in ChamadosService — never blocks a response. Client-facing e-mails: técnico a caminho / atendimento concluído.
 
 ### Key Patterns
 

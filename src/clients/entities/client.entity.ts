@@ -5,10 +5,12 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { City } from '../../cities/entities/city.entity';
+import { ClientLocal } from './client-local.entity';
 
 export type ClientType = 'pf' | 'pj';
 
@@ -79,6 +81,20 @@ export class Client {
 
   @Column({ type: 'text', nullable: true })
   observacoes: string | null;
+
+  // Contratante: cliente que fatura/abre a demanda para este cliente final
+  // (ex.: operadora → loja). Opcional.
+  @ManyToOne(() => Client, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'contratanteId' })
+  contratante: Client | null;
+
+  @Index()
+  @Column({ type: 'int', nullable: true })
+  contratanteId: number | null;
+
+  // Locais (sites) de atendimento deste cliente.
+  @OneToMany(() => ClientLocal, (l) => l.client)
+  locais: ClientLocal[];
 
   @Column({ type: 'boolean', default: true })
   ativo: boolean;

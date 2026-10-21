@@ -63,6 +63,11 @@ export class ChamadoLineItem {
   @Column({ type: 'varchar', default: 'manual' })
   origem: LineItemOrigem;
 
+  // Visita que originou a linha (linhas auto de mão de obra/deslocamento).
+  @Index()
+  @Column({ type: 'int', nullable: true })
+  visitaId: number | null;
+
   @Column({ type: 'int', nullable: true })
   createdByUserId: number | null;
 

@@ -1,4 +1,5 @@
-import { IsIn, IsOptional, IsString, Length } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Length } from 'class-validator';
+import { Type } from 'class-transformer';
 import type { ClientType } from '../entities/client.entity';
 
 /** Filtros da listagem de clientes (todos opcionais, casamento parcial). */
@@ -14,4 +15,7 @@ export class ListClientsQueryDto {
 
   /** Cidade do cliente (nome, casamento parcial). */
   @IsOptional() @IsString() cidade?: string;
+
+  /** Clientes finais de um contratante. */
+  @IsOptional() @Type(() => Number) @IsInt() contratanteId?: number;
 }

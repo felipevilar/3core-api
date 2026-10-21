@@ -8,6 +8,8 @@
 export interface ChamadoNotificationTarget {
   email: string;
   name: string;
+  // Presente para usuários do sistema (habilita notificação in-app).
+  userId?: number;
 }
 
 export interface ChamadoNotificationInfo {
@@ -35,6 +37,41 @@ export interface Notifier {
     chamado: ChamadoNotificationInfo,
     tecnico: ChamadoNotificationTarget,
     motivo: string | null,
+  ): Promise<void>;
+
+  /** Técnico saiu para o atendimento; avisa o cliente. */
+  notifyClienteACaminho(
+    chamado: ChamadoNotificationInfo,
+    cliente: ChamadoNotificationTarget,
+    tecnicoNome: string | null,
+  ): Promise<void>;
+
+  /** Atendimento concluído pelo técnico; avisa o cliente. */
+  notifyClienteConcluido(
+    chamado: ChamadoNotificationInfo,
+    cliente: ChamadoNotificationTarget,
+  ): Promise<void>;
+
+  /** SLA estourado (1ª visita ou conclusão); avisa os gestores. */
+  notifySlaEstourado(
+    chamado: ChamadoNotificationInfo,
+    admins: ChamadoNotificationTarget[],
+    detalhe: string,
+  ): Promise<void>;
+
+  /** Solicitação expirou sem aceite do técnico; avisa os gestores. */
+  notifySolicitacaoExpirada(
+    chamado: ChamadoNotificationInfo,
+    admins: ChamadoNotificationTarget[],
+    tecnicoNome: string | null,
+  ): Promise<void>;
+
+  /** Novo comentário no chamado; avisa a outra parte (técnico ou gestores). */
+  notifyComentario(
+    chamado: ChamadoNotificationInfo,
+    targets: ChamadoNotificationTarget[],
+    autorNome: string,
+    texto: string,
   ): Promise<void>;
 }
 

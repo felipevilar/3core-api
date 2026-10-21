@@ -16,6 +16,7 @@ const STATUSES = [
   'atribuido',
   'a_caminho',
   'em_atendimento',
+  'pausado',
   'finalizado',
   'fechado',
   'cancelado',
@@ -76,6 +77,20 @@ export class ListChamadosQueryDto {
   })
   @IsBoolean()
   solicitacaoPendente?: boolean;
+
+  /** Só chamados com SLA estourado (1ª visita ou conclusão) ainda em aberto. */
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true || undefined)
+  @IsBoolean()
+  slaEstourado?: boolean;
+
+  /** Inclui chamados arquivados (ocultos por padrão). */
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true || undefined)
+  @IsBoolean()
+  incluirArquivados?: boolean;
+
+  @IsOptional() @Type(() => Number) @IsInt() servicoId?: number;
 
   // ---- Intervalos de data (ISO date, inclusivos) ----
   @IsOptional() @IsISO8601() criadoDe?: string;
