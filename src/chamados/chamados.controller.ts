@@ -14,13 +14,22 @@ import { CreateChamadoDto } from './dto/create-chamado.dto';
 import { UpdateChamadoDto } from './dto/update-chamado.dto';
 import { ListChamadosQueryDto } from './dto/list-chamados.query.dto';
 import {
+  AjustarExecucaoDto,
   AtribuirDto,
+  ComentarioDto,
+  ComprovanteUploadUrlDto,
+  CreateComprovanteDto,
   CreateLineItemDto,
   CreateRatDto,
+  CreateVisitaDto,
   FinalizarDto,
+  MinhaRotaQueryDto,
   MotivoDto,
+  OrdemRotaDto,
+  PausarDto,
   RatUploadUrlDto,
   ReagendarDto,
+  TransicaoCampoDto,
   UpdateLineItemDto,
   UpdateImpostoDto,
   UpdatePagamentoDto,
@@ -51,6 +60,16 @@ export class ChamadosController {
     return this.service.agenda(query, user);
   }
 
+  // Rota do dia do técnico (gestor pode consultar outro técnico).
+  @Get('minha-rota')
+  @RequireAnyPermission(
+    'atendimentos.ver_solicitacoes',
+    'atendimentos.gerenciar',
+  )
+  minhaRota(@Query() query: MinhaRotaQueryDto, @CurrentUser() user: AuthUser) {
+    return this.service.minhaRota(query, user);
+  }
+
   @Get(':id')
   @RequirePermissions('atendimentos.ver')
   findOne(
@@ -73,6 +92,89 @@ export class ChamadosController {
   @RequirePermissions('atendimentos.ver')
   rats(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
     return this.service.listRats(id, user);
+  }
+
+  // ---- visitas ----
+  @Get(':id/visitas')
+  @RequirePermissions('atendimentos.ver')
+  visitas(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.listVisitas(id, user);
+  }
+
+  /** Nova visita (retorno) após a atual ter sido finalizada/cancelada. */
+  @Post(':id/visitas')
+  @RequirePermissions('atendimentos.gerenciar')
+  criarVisita(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateVisitaDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.criarVisita(id, dto, user);
+  }
+
+  @Post(':id/visitas/:visitaId/cancelar')
+  @RequirePermissions('atendimentos.gerenciar')
+  cancelarVisita(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('visitaId', ParseIntPipe) visitaId: number,
+    @Body() dto: MotivoDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.cancelarVisita(id, visitaId, dto, user);
+  }
+
+  /** Gestor corrige horas/km de uma visita finalizada (regenera linhas auto). */
+  @Patch(':id/visitas/:visitaId/execucao')
+  @RequirePermissions('financeiro.gerenciar')
+  ajustarExecucao(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('visitaId', ParseIntPipe) visitaId: number,
+    @Body() dto: AjustarExecucaoDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.ajustarExecucao(id, visitaId, dto, user);
+  }
+
+  @Patch(':id/visitas/:visitaId/ordem')
+  @RequireAnyPermission('atendimentos.ver_solicitacoes', 'agenda.gerenciar')
+  ordemRota(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('visitaId', ParseIntPipe) visitaId: number,
+    @Body() dto: OrdemRotaDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.definirOrdemRota(
+      id,
+      visitaId,
+      dto.ordemRota ?? null,
+      user,
+    );
+  }
+
+  @Get(':id/visitas/:visitaId/assinatura/download-url')
+  @RequirePermissions('atendimentos.ver')
+  assinaturaDownloadUrl(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('visitaId', ParseIntPipe) visitaId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.getAssinaturaDownloadUrl(id, visitaId, user);
+  }
+
+  /** Prévia da finalização: horas líquidas sugeridas e pausas da visita atual. */
+  @Get(':id/previa-finalizacao')
+  @RequireAnyPermission(
+    'atendimentos.ver_solicitacoes',
+    'atendimentos.gerenciar',
+  )
+  previaFinalizacao(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.previaFinalizacao(id, user);
   }
 
   // ---- CRUD ----
@@ -188,9 +290,10 @@ export class ChamadosController {
   )
   aCaminho(
     @Param('id', ParseIntPipe) id: number,
+    @Body() dto: TransicaoCampoDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.service.marcarACaminho(id, user);
+    return this.service.marcarACaminho(id, dto, user);
   }
 
   @Post(':id/chegada')
@@ -200,9 +303,35 @@ export class ChamadosController {
   )
   chegada(
     @Param('id', ParseIntPipe) id: number,
+    @Body() dto: TransicaoCampoDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.service.confirmarChegada(id, user);
+    return this.service.confirmarChegada(id, dto, user);
+  }
+
+  @Post(':id/pausar')
+  @RequireAnyPermission(
+    'atendimentos.ver_solicitacoes',
+    'atendimentos.gerenciar',
+  )
+  pausar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: PausarDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.pausar(id, dto, user);
+  }
+
+  @Post(':id/retomar')
+  @RequireAnyPermission(
+    'atendimentos.ver_solicitacoes',
+    'atendimentos.gerenciar',
+  )
+  retomar(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.retomar(id, user);
   }
 
   @Post(':id/finalizar')
@@ -216,6 +345,55 @@ export class ChamadosController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.service.finalizar(id, dto, user);
+  }
+
+  // ---- arquivamento ----
+  @Post(':id/arquivar')
+  @RequirePermissions('atendimentos.gerenciar')
+  arquivar(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.arquivar(id, user);
+  }
+
+  @Post(':id/desarquivar')
+  @RequirePermissions('atendimentos.gerenciar')
+  desarquivar(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.desarquivar(id, user);
+  }
+
+  // ---- comentários (técnico dono ou gestor; escopo no service) ----
+  @Get(':id/comentarios')
+  @RequirePermissions('atendimentos.ver')
+  comentarios(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.listComentarios(id, user);
+  }
+
+  @Post(':id/comentarios')
+  @RequirePermissions('atendimentos.ver')
+  addComentario(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ComentarioDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.addComentario(id, dto, user);
+  }
+
+  @Delete(':id/comentarios/:comentarioId')
+  @RequirePermissions('atendimentos.ver')
+  removeComentario(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('comentarioId', ParseIntPipe) comentarioId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.removeComentario(id, comentarioId, user);
   }
 
   // ---- RAT ----
@@ -243,6 +421,16 @@ export class ChamadosController {
     return this.service.addRat(id, dto, user);
   }
 
+  /** Signed upload URL para a imagem da assinatura do cliente. */
+  @Post(':id/assinatura/upload-url')
+  @RequireAnyPermission('atendimentos.ver_solicitacoes', 'atendimentos.editar')
+  assinaturaUploadUrl(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.createAssinaturaUploadUrl(id, user);
+  }
+
   @Get(':id/rat/:ratId/download-url')
   @RequirePermissions('atendimentos.ver')
   ratDownloadUrl(
@@ -261,6 +449,58 @@ export class ChamadosController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.service.removeRat(id, ratId, user);
+  }
+
+  // ---- comprovantes do repasse ao técnico ----
+  // Mesmo fluxo da RAT: upload-url → PUT no Storage → confirma metadados.
+  // Anexar/remover: financeiro.gerenciar. Ver/baixar: financeiro (todos) ou o
+  // próprio técnico (ver_proprio), com escopo validado no service.
+  @Get(':id/comprovantes')
+  @RequireAnyPermission('financeiro.ver', 'financeiro.ver_proprio')
+  comprovantes(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.listComprovantes(id, user);
+  }
+
+  @Post(':id/comprovantes/upload-url')
+  @RequirePermissions('financeiro.gerenciar')
+  comprovanteUploadUrl(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ComprovanteUploadUrlDto,
+  ) {
+    return this.service.createComprovanteUploadUrl(id, dto.fileName);
+  }
+
+  @Post(':id/comprovantes')
+  @RequirePermissions('financeiro.gerenciar')
+  addComprovante(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateComprovanteDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.addComprovante(id, dto, user);
+  }
+
+  @Get(':id/comprovantes/:comprovanteId/download-url')
+  @RequireAnyPermission('financeiro.ver', 'financeiro.ver_proprio')
+  comprovanteDownloadUrl(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('comprovanteId', ParseIntPipe) comprovanteId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.getComprovanteDownloadUrl(id, comprovanteId, user);
+  }
+
+  @Delete(':id/comprovantes/:comprovanteId')
+  @RequirePermissions('financeiro.gerenciar')
+  removeComprovante(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('comprovanteId', ParseIntPipe) comprovanteId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.removeComprovante(id, comprovanteId, user);
   }
 
   // ---- financeiro por chamado ----

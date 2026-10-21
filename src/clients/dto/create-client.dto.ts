@@ -40,6 +40,9 @@ export class CreateClientDto {
 
   @IsOptional() @IsString() observacoes?: string;
 
+  // Contratante (cliente que fatura/abre a demanda). null remove o vínculo.
+  @IsOptional() @IsInt() contratanteId?: number | null;
+
   @IsOptional() @IsBoolean() ativo?: boolean;
 
   // Padrão de nota fiscal para os chamados do cliente.

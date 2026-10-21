@@ -25,6 +25,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   landing: 'Landing Page',
   tecnicos: 'Técnicos',
   financeiro: 'Financeiro',
+  servicos: 'Serviços',
   usuarios: 'Usuários',
   roles: 'Papéis',
   perfil: 'Perfil',
@@ -134,6 +135,18 @@ export const PERMISSIONS: PermissionDef[] = [
     feature: 'financeiro',
   },
 
+  // Catálogo de serviços
+  {
+    key: 'servicos.ver',
+    label: 'Ver catálogo de serviços',
+    feature: 'servicos',
+  },
+  {
+    key: 'servicos.gerenciar',
+    label: 'Gerenciar catálogo de serviços',
+    feature: 'servicos',
+  },
+
   // Usuários (administração)
   { key: 'usuarios.ver', label: 'Ver usuários', feature: 'usuarios' },
   { key: 'usuarios.criar', label: 'Criar usuário', feature: 'usuarios' },
@@ -162,6 +175,11 @@ export const PERMISSIONS: PermissionDef[] = [
     label: 'Ver configurações gerais',
     feature: 'configuracoes',
   },
+  {
+    key: 'configuracoes.gerenciar',
+    label: 'Alterar configurações operacionais',
+    feature: 'configuracoes',
+  },
 ];
 
 /** Todas as chaves de permissão (usado para o papel super_admin). */
@@ -174,6 +192,7 @@ export const TECNICO_PERMISSION_KEYS: string[] = [
   'atendimentos.ver',
   'atendimentos.ver_historico',
   'atendimentos.ver_solicitacoes',
+  'servicos.ver',
   'financeiro.ver_proprio',
 ];
 

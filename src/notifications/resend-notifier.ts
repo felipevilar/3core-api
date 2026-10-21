@@ -63,6 +63,87 @@ export class ResendNotifier implements Notifier {
     });
   }
 
+  async notifyClienteACaminho(
+    chamado: ChamadoNotificationInfo,
+    cliente: ChamadoNotificationTarget,
+    tecnicoNome: string | null,
+  ): Promise<void> {
+    if (!cliente.email) return;
+    await this.send({
+      to: cliente.email,
+      subject: `Técnico a caminho — chamado ${chamado.codigo}`,
+      html: `
+        <p>Olá, <strong>${cliente.name}</strong>.</p>
+        <p>${tecnicoNome ? `O técnico <strong>${tecnicoNome}</strong>` : 'Nosso técnico'} está a caminho para o atendimento do chamado <strong>${chamado.codigo}</strong> — <em>${chamado.titulo}</em>.</p>
+      `,
+    });
+  }
+
+  async notifyClienteConcluido(
+    chamado: ChamadoNotificationInfo,
+    cliente: ChamadoNotificationTarget,
+  ): Promise<void> {
+    if (!cliente.email) return;
+    await this.send({
+      to: cliente.email,
+      subject: `Atendimento concluído — chamado ${chamado.codigo}`,
+      html: `
+        <p>Olá, <strong>${cliente.name}</strong>.</p>
+        <p>O atendimento do chamado <strong>${chamado.codigo}</strong> — <em>${chamado.titulo}</em> — foi concluído pelo nosso técnico.</p>
+        <p>Obrigado pela confiança.</p>
+      `,
+    });
+  }
+
+  async notifySlaEstourado(
+    chamado: ChamadoNotificationInfo,
+    admins: ChamadoNotificationTarget[],
+    detalhe: string,
+  ): Promise<void> {
+    if (!admins.length) return;
+    await this.send({
+      to: admins.map((a) => a.email),
+      subject: `SLA estourado — chamado ${chamado.codigo}`,
+      html: `
+        <p>O chamado <strong>${chamado.codigo}</strong> — <em>${chamado.titulo}</em> — estourou o SLA.</p>
+        <p>${detalhe}</p>
+      `,
+    });
+  }
+
+  async notifySolicitacaoExpirada(
+    chamado: ChamadoNotificationInfo,
+    admins: ChamadoNotificationTarget[],
+    tecnicoNome: string | null,
+  ): Promise<void> {
+    if (!admins.length) return;
+    await this.send({
+      to: admins.map((a) => a.email),
+      subject: `Solicitação expirada — chamado ${chamado.codigo}`,
+      html: `
+        <p>A solicitação do chamado <strong>${chamado.codigo}</strong> — <em>${chamado.titulo}</em> — expirou sem aceite${tecnicoNome ? ` de <strong>${tecnicoNome}</strong>` : ''}.</p>
+        <p>O chamado voltou para <strong>aberto</strong>; atribua outro técnico.</p>
+      `,
+    });
+  }
+
+  async notifyComentario(
+    chamado: ChamadoNotificationInfo,
+    targets: ChamadoNotificationTarget[],
+    autorNome: string,
+    texto: string,
+  ): Promise<void> {
+    if (!targets.length) return;
+    await this.send({
+      to: targets.map((t) => t.email),
+      subject: `Novo comentário — chamado ${chamado.codigo}`,
+      html: `
+        <p><strong>${autorNome}</strong> comentou no chamado <strong>${chamado.codigo}</strong> — <em>${chamado.titulo}</em>:</p>
+        <blockquote>${texto}</blockquote>
+      `,
+    });
+  }
+
   private async send(params: {
     to: string | string[];
     subject: string;

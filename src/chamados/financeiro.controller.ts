@@ -3,7 +3,10 @@ import { FinanceiroService } from './financeiro.service';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
-import { UpdateFinanceiroConfigDto } from './dto/chamado-actions.dto';
+import {
+  PagamentoLoteDto,
+  UpdateFinanceiroConfigDto,
+} from './dto/chamado-actions.dto';
 
 @Controller('financeiro')
 export class FinanceiroController {
@@ -24,6 +27,13 @@ export class FinanceiroController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.service.updateConfig(dto.aliquotaImposto, user);
+  }
+
+  /** Aprovação/pagamento em massa de repasses (tolerante a falhas por id). */
+  @Patch('pagamentos/lote')
+  @RequirePermissions('financeiro.gerenciar')
+  pagamentoLote(@Body() dto: PagamentoLoteDto, @CurrentUser() user: AuthUser) {
+    return this.service.pagamentoLote(dto, user);
   }
 
   /** Painel consolidado de um período (KPIs + atendimentos). */
