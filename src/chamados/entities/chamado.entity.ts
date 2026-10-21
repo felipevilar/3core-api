@@ -16,6 +16,7 @@ import { User } from '../../auth/entities/user.entity';
 import { ChamadoLineItem } from './chamado-line-item.entity';
 import { ChamadoEvent } from './chamado-event.entity';
 import { ChamadoRat } from './chamado-rat.entity';
+import { ChamadoComprovante } from './chamado-comprovante.entity';
 import { ChamadoVisita } from './chamado-visita.entity';
 import { ClientLocal } from '../../clients/entities/client-local.entity';
 import { Servico } from '../../servicos/entities/servico.entity';
@@ -304,6 +305,9 @@ export class Chamado {
 
   @OneToMany(() => ChamadoRat, (r) => r.chamado)
   rats: ChamadoRat[];
+
+  @OneToMany(() => ChamadoComprovante, (c) => c.chamado)
+  comprovantes: ChamadoComprovante[];
 
   @OneToMany(() => ChamadoVisita, (v) => v.chamado)
   visitas: ChamadoVisita[];

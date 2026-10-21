@@ -1,7 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
+import { DataSource, In, Repository, SelectQueryBuilder } from 'typeorm';
 import { Chamado } from './entities/chamado.entity';
+import { ChamadoComprovante } from './entities/chamado-comprovante.entity';
+import {
+  TechProfile,
+  PagamentoInfo,
+} from '../technicians/entities/tech-profile.entity';
+import { ChamadosService } from './chamados.service';
+import { PagamentoLoteDto } from './dto/chamado-actions.dto';
 import {
   FINANCEIRO_CONFIG_ID,
   FinanceiroConfig,
@@ -26,8 +33,45 @@ export class FinanceiroService {
   constructor(
     @InjectRepository(Chamado)
     private readonly chamadoRepo: Repository<Chamado>,
+    @InjectRepository(TechProfile)
+    private readonly techProfileRepo: Repository<TechProfile>,
+    @InjectRepository(ChamadoComprovante)
+    private readonly comprovanteRepo: Repository<ChamadoComprovante>,
     private readonly dataSource: DataSource,
+    private readonly chamados: ChamadosService,
   ) {}
+
+  // ============================================================ pagamentos em lote
+
+  /**
+   * Aprova ou paga vários repasses de uma vez. Cada chamado roda na própria
+   * transação (via `updatePagamento`), então uma falha (ex.: transição
+   * inválida) não derruba os demais — o resultado lista ok/erros por id.
+   */
+  async pagamentoLote(dto: PagamentoLoteDto, user: AuthUser) {
+    const ids = [...new Set(dto.ids)];
+    const ok: number[] = [];
+    const erros: { id: number; motivo: string }[] = [];
+    for (const id of ids) {
+      try {
+        await this.chamados.updatePagamento(
+          id,
+          { paymentStatus: dto.paymentStatus },
+          user,
+        );
+        ok.push(id);
+      } catch (e) {
+        const err = e as {
+          message?: string;
+          response?: { message?: string | string[] };
+        };
+        const raw: string | string[] =
+          err.response?.message ?? err.message ?? 'Erro';
+        erros.push({ id, motivo: Array.isArray(raw) ? raw[0] : raw });
+      }
+    }
+    return { ok, erros };
+  }
 
   // ============================================================ configuração
 
@@ -141,6 +185,39 @@ export class FinanceiroService {
 
     const chamados = await qb.getMany();
 
+    // Dados de pagamento (PIX/banco) dos técnicos do período, para o financeiro
+    // copiar na hora do repasse, e quantidade de comprovantes por chamado.
+    const tecnicoIds = [
+      ...new Set(
+        chamados
+          .map((c) => c.tecnicoUserId)
+          .filter((v): v is number => v != null),
+      ),
+    ];
+    const pagamentoPorTecnico = new Map<number, PagamentoInfo | null>();
+    if (tecnicoIds.length) {
+      const perfis = await this.techProfileRepo.find({
+        where: { userId: In(tecnicoIds) },
+        select: { userId: true, pagamento: true },
+      });
+      for (const p of perfis) pagamentoPorTecnico.set(p.userId, p.pagamento);
+    }
+    const comprovantesPorChamado = new Map<number, number>();
+    if (chamados.length) {
+      const counts: { chamadoId: number; qtd: string }[] =
+        await this.comprovanteRepo
+          .createQueryBuilder('cp')
+          .select('cp.chamadoId', 'chamadoId')
+          .addSelect('COUNT(*)', 'qtd')
+          .where('cp.chamadoId IN (:...ids)', {
+            ids: chamados.map((c) => c.id),
+          })
+          .groupBy('cp.chamadoId')
+          .getRawMany();
+      for (const r of counts)
+        comprovantesPorChamado.set(Number(r.chamadoId), Number(r.qtd));
+    }
+
     const rows = chamados.map((c) => ({
       id: c.id,
       codigo: c.codigo,
@@ -165,6 +242,11 @@ export class FinanceiroService {
       ]),
       paymentStatus: c.paymentStatus,
       clientePaymentStatus: c.clientePaymentStatus,
+      tecnicoPagamento:
+        c.tecnicoUserId != null
+          ? (pagamentoPorTecnico.get(c.tecnicoUserId) ?? null)
+          : null,
+      comprovantes: comprovantesPorChamado.get(c.id) ?? 0,
     }));
 
     // KPIs somados das mesmas linhas (centavos — sem erro de float).

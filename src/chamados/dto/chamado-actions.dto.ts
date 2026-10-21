@@ -1,4 +1,7 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -144,6 +147,16 @@ const PAYMENT_STATUSES = ['pendente', 'aprovado', 'pago'];
 const CLIENTE_PAYMENT_STATUSES = ['pendente', 'pago'];
 
 /** Muda o ciclo de pagamento (técnico e/ou cliente) e/ou a competência. */
+/** Aprovação/pagamento em massa de repasses (um chamado por vez, tolerante a falhas). */
+export class PagamentoLoteDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @IsInt({ each: true })
+  ids: number[];
+  @IsIn(['aprovado', 'pago']) paymentStatus: 'aprovado' | 'pago';
+}
+
 export class UpdatePagamentoDto {
   @IsOptional() @IsIn(PAYMENT_STATUSES) paymentStatus?:
     | 'pendente'
@@ -188,3 +201,7 @@ export class CreateRatDto {
   @IsOptional() @IsInt() sizeBytes?: number;
   @IsOptional() @IsString() observacoes?: string;
 }
+
+/** Comprovante do repasse ao técnico (mesmo fluxo da RAT). */
+export class ComprovanteUploadUrlDto extends RatUploadUrlDto {}
+export class CreateComprovanteDto extends CreateRatDto {}

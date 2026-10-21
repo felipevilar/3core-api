@@ -34,6 +34,8 @@ export type ChamadoEventTipo =
   | 'editado'
   | 'rat_anexado'
   | 'rat_removido'
+  | 'comprovante_anexado'
+  | 'comprovante_removido'
   | 'line_item_alterado'
   | 'execucao_ajustada'
   | 'financeiro_alterado'

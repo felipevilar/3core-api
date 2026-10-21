@@ -4,6 +4,7 @@ import { Chamado } from './entities/chamado.entity';
 import { ChamadoLineItem } from './entities/chamado-line-item.entity';
 import { ChamadoEvent } from './entities/chamado-event.entity';
 import { ChamadoRat } from './entities/chamado-rat.entity';
+import { ChamadoComprovante } from './entities/chamado-comprovante.entity';
 import { ChamadoVisita } from './entities/chamado-visita.entity';
 import { ChamadoVisitaPausa } from './entities/chamado-visita-pausa.entity';
 import { ClientLocal } from '../clients/entities/client-local.entity';
@@ -28,6 +29,7 @@ import { FinanceiroController } from './financeiro.controller';
       ChamadoLineItem,
       ChamadoEvent,
       ChamadoRat,
+      ChamadoComprovante,
       ChamadoVisita,
       ChamadoVisitaPausa,
       ClientLocal,

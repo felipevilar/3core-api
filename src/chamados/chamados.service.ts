@@ -19,6 +19,7 @@ import { Chamado, ChamadoStatus } from './entities/chamado.entity';
 import { ChamadoLineItem } from './entities/chamado-line-item.entity';
 import { ChamadoEvent } from './entities/chamado-event.entity';
 import { ChamadoRat } from './entities/chamado-rat.entity';
+import { ChamadoComprovante } from './entities/chamado-comprovante.entity';
 import {
   ChamadoVisita,
   VISITA_STATUS_ATIVOS,
@@ -42,6 +43,7 @@ import {
   AtribuirDto,
   ComentarioDto,
   CreateLineItemDto,
+  CreateComprovanteDto,
   CreateRatDto,
   CreateVisitaDto,
   AjustarExecucaoDto,
@@ -103,6 +105,8 @@ export class ChamadosService {
     private readonly ratRepo: Repository<ChamadoRat>,
     @InjectRepository(ChamadoVisita)
     private readonly visitaRepo: Repository<ChamadoVisita>,
+    @InjectRepository(ChamadoComprovante)
+    private readonly comprovanteRepo: Repository<ChamadoComprovante>,
     private readonly dataSource: DataSource,
     @Inject(NOTIFIER) private readonly notifier: Notifier,
     private readonly storage: StorageService,
@@ -1237,9 +1241,13 @@ export class ChamadosService {
       );
     }
     const rats = await this.ratRepo.find({ where: { chamadoId: id } });
+    const comprovantes = await this.comprovanteRepo.find({
+      where: { chamadoId: id },
+    });
     const visitas = await this.visitaRepo.find({ where: { chamadoId: id } });
     const paths = [
       ...rats.map((r) => r.storagePath),
+      ...comprovantes.map((c) => c.storagePath),
       ...visitas.map((v) => v.assinaturaPath).filter((p): p is string => !!p),
     ];
     await this.chamadoRepo.remove(chamado);
@@ -2747,6 +2755,104 @@ export class ChamadosService {
     } catch (e) {
       this.logger.warn(
         `RAT ${ratId} removida do banco, mas o objeto ${rat.storagePath} não foi apagado: ${(e as Error).message}`,
+      );
+    }
+    return { success: true };
+  }
+
+  // ============================================================ comprovantes de pagamento
+
+  /**
+   * Comprovantes só existem para chamados fechados (é quando há repasse). A
+   * permissão `financeiro.gerenciar` é checada no controller.
+   */
+  private async loadFechadoParaComprovante(id: number) {
+    const chamado = await this.loadOrFail(id);
+    if (chamado.status !== 'fechado') {
+      throw new ConflictException(
+        'Comprovante de pagamento só pode ser anexado a chamados fechados',
+      );
+    }
+    return chamado;
+  }
+
+  async createComprovanteUploadUrl(id: number, fileName: string) {
+    await this.loadFechadoParaComprovante(id);
+    const safeName = (fileName || 'comprovante')
+      .replace(/[^\w.-]+/g, '_')
+      .slice(-80);
+    const path = `chamados/${id}/comprovantes/${await this.storageTs()}-${safeName}`;
+    const signed = await this.storage.createSignedUploadUrl(path);
+    return { ...signed, fileName: safeName };
+  }
+
+  async addComprovante(id: number, dto: CreateComprovanteDto, user: AuthUser) {
+    await this.loadFechadoParaComprovante(id);
+    this.assertPathDoChamado(id, dto.storagePath);
+    return this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(ChamadoComprovante);
+      const comprovante = await repo.save(
+        repo.create({
+          chamadoId: id,
+          storagePath: dto.storagePath,
+          fileName: dto.fileName,
+          mimeType: dto.mimeType ?? null,
+          sizeBytes: dto.sizeBytes ?? null,
+          observacoes: dto.observacoes ?? null,
+          uploadedByUserId: user.userId,
+        }),
+      );
+      await this.logEvent(manager, id, user, {
+        tipo: 'comprovante_anexado',
+        metadata: {
+          comprovanteId: comprovante.id,
+          fileName: comprovante.fileName,
+        },
+      });
+      return comprovante;
+    });
+  }
+
+  /** Lista comprovantes: gestor financeiro ou o próprio técnico do chamado. */
+  async listComprovantes(id: number, user: AuthUser) {
+    await this.assertAcessible(id, user);
+    return this.comprovanteRepo.find({
+      where: { chamadoId: id },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async getComprovanteDownloadUrl(
+    id: number,
+    comprovanteId: number,
+    user: AuthUser,
+  ) {
+    await this.assertAcessible(id, user);
+    const c = await this.comprovanteRepo.findOne({
+      where: { id: comprovanteId, chamadoId: id },
+    });
+    if (!c) throw new NotFoundException('Comprovante não encontrado');
+    return this.storage.createSignedDownloadUrl(c.storagePath);
+  }
+
+  async removeComprovante(id: number, comprovanteId: number, user: AuthUser) {
+    await this.loadOrFail(id);
+    const c = await this.comprovanteRepo.findOne({
+      where: { id: comprovanteId, chamadoId: id },
+    });
+    if (!c) throw new NotFoundException('Comprovante não encontrado');
+    await this.dataSource.transaction(async (manager) => {
+      await manager.getRepository(ChamadoComprovante).delete({ id: c.id });
+      await this.logEvent(manager, id, user, {
+        tipo: 'comprovante_removido',
+        metadata: { comprovanteId: c.id, fileName: c.fileName },
+      });
+    });
+    try {
+      await this.storage.remove(c.storagePath);
+    } catch (e) {
+      this.logger.warn(
+        `Comprovante ${c.id} removido do banco, mas o objeto ${c.storagePath} não foi apagado: ${(e as Error).message}`,
       );
     }
     return { success: true };

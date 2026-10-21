@@ -17,6 +17,8 @@ import {
   AjustarExecucaoDto,
   AtribuirDto,
   ComentarioDto,
+  ComprovanteUploadUrlDto,
+  CreateComprovanteDto,
   CreateLineItemDto,
   CreateRatDto,
   CreateVisitaDto,
@@ -447,6 +449,58 @@ export class ChamadosController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.service.removeRat(id, ratId, user);
+  }
+
+  // ---- comprovantes do repasse ao técnico ----
+  // Mesmo fluxo da RAT: upload-url → PUT no Storage → confirma metadados.
+  // Anexar/remover: financeiro.gerenciar. Ver/baixar: financeiro (todos) ou o
+  // próprio técnico (ver_proprio), com escopo validado no service.
+  @Get(':id/comprovantes')
+  @RequireAnyPermission('financeiro.ver', 'financeiro.ver_proprio')
+  comprovantes(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.listComprovantes(id, user);
+  }
+
+  @Post(':id/comprovantes/upload-url')
+  @RequirePermissions('financeiro.gerenciar')
+  comprovanteUploadUrl(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ComprovanteUploadUrlDto,
+  ) {
+    return this.service.createComprovanteUploadUrl(id, dto.fileName);
+  }
+
+  @Post(':id/comprovantes')
+  @RequirePermissions('financeiro.gerenciar')
+  addComprovante(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateComprovanteDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.addComprovante(id, dto, user);
+  }
+
+  @Get(':id/comprovantes/:comprovanteId/download-url')
+  @RequireAnyPermission('financeiro.ver', 'financeiro.ver_proprio')
+  comprovanteDownloadUrl(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('comprovanteId', ParseIntPipe) comprovanteId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.getComprovanteDownloadUrl(id, comprovanteId, user);
+  }
+
+  @Delete(':id/comprovantes/:comprovanteId')
+  @RequirePermissions('financeiro.gerenciar')
+  removeComprovante(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('comprovanteId', ParseIntPipe) comprovanteId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.removeComprovante(id, comprovanteId, user);
   }
 
   // ---- financeiro por chamado ----
